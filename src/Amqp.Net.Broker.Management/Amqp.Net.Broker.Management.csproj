@@ -7,7 +7,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Amqp.Net.Broker.Core\Amqp.Net.Broker.Core.csproj" />
-    <ProjectReference Include="..\Amqp.Net.Broker.Cluster\Amqp.Net.Broker.Cluster.csproj" />
+    <!-- TODO: Re-enable when Cluster project is ready and Akka.Cluster vulnerability is resolved -->
+    <!-- <ProjectReference Include="..\Amqp.Net.Broker.Cluster\Amqp.Net.Broker.Cluster.csproj" /> -->
   </ItemGroup>
 
   <ItemGroup>
