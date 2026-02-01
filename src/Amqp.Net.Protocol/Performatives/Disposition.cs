@@ -47,66 +47,90 @@ public sealed record Disposition : PerformativeBase
     /// <inheritdoc />
     public override int Encode(Span<byte> buffer)
     {
-        int offset = 0;
+        var offset = 0;
         buffer[offset++] = FormatCode.Described;
         offset += AmqpEncoder.EncodeULong(buffer[offset..], DescriptorCode);
-
-        int fieldCount = GetFieldCount();
+        var fieldCount = GetFieldCount();
         Span<byte> body = stackalloc byte[128];
-        int bodySize = EncodeFields(body, fieldCount);
-
+        var bodySize = EncodeFields(body, fieldCount);
         offset += AmqpEncoder.EncodeListHeader(buffer[offset..], bodySize, fieldCount);
         body[..bodySize].CopyTo(buffer[offset..]);
         offset += bodySize;
-
         return offset;
     }
 
     private int EncodeFields(Span<byte> buffer, int fieldCount)
     {
-        int offset = 0;
+        var offset = 0;
 
         // Field 0: role (mandatory)
         offset += AmqpEncoder.EncodeBoolean(buffer[offset..], Role);
 
         // Field 1: first (mandatory)
         offset += AmqpEncoder.EncodeUInt(buffer[offset..], First);
-
-        if (fieldCount <= 2) return offset;
+        if (fieldCount <= 2)
+        {
+            return offset;
+        }
 
         // Field 2: last
         if (Last.HasValue)
+        {
             offset += AmqpEncoder.EncodeUInt(buffer[offset..], Last.Value);
+        }
         else
+        {
             offset += AmqpEncoder.EncodeNull(buffer[offset..]);
-
-        if (fieldCount <= 3) return offset;
+        }
+        if (fieldCount <= 3)
+        {
+            return offset;
+        }
 
         // Field 3: settled
         offset += AmqpEncoder.EncodeBoolean(buffer[offset..], Settled);
-
-        if (fieldCount <= 4) return offset;
+        if (fieldCount <= 4)
+        {
+            return offset;
+        }
 
         // Field 4: state
         if (State != null)
+        {
             offset += State.Encode(buffer[offset..]);
+        }
         else
+        {
             offset += AmqpEncoder.EncodeNull(buffer[offset..]);
-
-        if (fieldCount <= 5) return offset;
+        }
+        if (fieldCount <= 5)
+        {
+            return offset;
+        }
 
         // Field 5: batchable
         offset += AmqpEncoder.EncodeBoolean(buffer[offset..], Batchable);
-
         return offset;
     }
 
     private int GetFieldCount()
     {
-        if (Batchable) return 6;
-        if (State != null) return 5;
-        if (Settled) return 4;
-        if (Last.HasValue) return 3;
+        if (Batchable)
+        {
+            return 6;
+        }
+        if (State != null)
+        {
+            return 5;
+        }
+        if (Settled)
+        {
+            return 4;
+        }
+        if (Last.HasValue)
+        {
+            return 3;
+        }
         return 2;
     }
 
@@ -118,53 +142,60 @@ public sealed record Disposition : PerformativeBase
     /// </summary>
     public static Disposition Decode(ReadOnlySpan<byte> buffer, out int listSize, out int bytesConsumed)
     {
-        var (size, count) = AmqpDecoder.DecodeListHeader(buffer, out int headerSize);
+        var (size, count) = AmqpDecoder.DecodeListHeader(buffer, out var headerSize);
         listSize = size;
         bytesConsumed = headerSize + size;
-
         if (count < 2)
+        {
             throw new AmqpDecodeException("Disposition requires at least 2 fields");
-
-        int offset = headerSize;
+        }
+        var offset = headerSize;
 
         // Field 0: role
-        bool role = AmqpDecoder.DecodeBoolean(buffer[offset..], out int consumed);
+        var role = AmqpDecoder.DecodeBoolean(buffer[offset..], out var consumed);
         offset += consumed;
 
         // Field 1: first
-        uint first = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
+        var first = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
         offset += consumed;
-
         var disposition = new Disposition { Role = role, First = first };
-
-        if (count <= 2) return disposition;
+        if (count <= 2)
+        {
+            return disposition;
+        }
 
         // Field 2: last
         uint? last = null;
         if (!AmqpDecoder.DecodeNull(buffer[offset..], out consumed))
+        {
             last = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
+        }
         offset += consumed;
-
-        if (count <= 3) return disposition with { Last = last };
+        if (count <= 3)
+        {
+            return disposition with { Last = last };
+        }
 
         // Field 3: settled
-        bool settled = false;
+        var settled = false;
         if (!AmqpDecoder.DecodeNull(buffer[offset..], out consumed))
+        {
             settled = AmqpDecoder.DecodeBoolean(buffer[offset..], out consumed);
+        }
         offset += consumed;
-
-        if (count <= 4) return disposition with { Last = last, Settled = settled };
+        if (count <= 4)
+        {
+            return disposition with { Last = last, Settled = settled };
+        }
 
         // Field 4: state - skip for now
         consumed = AmqpDecoder.SkipValue(buffer[offset..]);
         offset += consumed;
-
         return disposition with { Last = last, Settled = settled };
     }
 
     /// <inheritdoc />
-    public override string ToString() =>
-        $"Disposition(Role={(Role ? "receiver" : "sender")}, First={First}, Last={Last}, Settled={Settled}, State={State?.GetType().Name})";
+    public override string ToString() => $"Disposition(Role={(Role ? "receiver" : "sender")}, First={First}, Last={Last}, Settled={Settled}, State={State?.GetType().Name})";
 }
 
 /// <summary>
@@ -173,6 +204,7 @@ public sealed record Disposition : PerformativeBase
 public abstract class DeliveryState
 {
     public abstract ulong DescriptorCode { get; }
+
     public abstract int Encode(Span<byte> buffer);
 }
 
@@ -187,7 +219,7 @@ public sealed class Accepted : DeliveryState
 
     public override int Encode(Span<byte> buffer)
     {
-        int offset = 0;
+        var offset = 0;
         buffer[offset++] = FormatCode.Described;
         offset += AmqpEncoder.EncodeULong(buffer[offset..], DescriptorCode);
         offset += AmqpEncoder.EncodeListHeader(buffer[offset..], 0, 0);
@@ -206,14 +238,13 @@ public sealed class Rejected : DeliveryState
 
     public override int Encode(Span<byte> buffer)
     {
-        int offset = 0;
+        var offset = 0;
         buffer[offset++] = FormatCode.Described;
         offset += AmqpEncoder.EncodeULong(buffer[offset..], DescriptorCode);
-
         if (Error != null)
         {
             Span<byte> body = stackalloc byte[256];
-            int bodySize = Error.Encode(body);
+            var bodySize = Error.Encode(body);
             offset += AmqpEncoder.EncodeListHeader(buffer[offset..], bodySize, 1);
             body[..bodySize].CopyTo(buffer[offset..]);
             offset += bodySize;
@@ -222,7 +253,6 @@ public sealed class Rejected : DeliveryState
         {
             offset += AmqpEncoder.EncodeListHeader(buffer[offset..], 0, 0);
         }
-
         return offset;
     }
 }
@@ -238,7 +268,7 @@ public sealed class Released : DeliveryState
 
     public override int Encode(Span<byte> buffer)
     {
-        int offset = 0;
+        var offset = 0;
         buffer[offset++] = FormatCode.Described;
         offset += AmqpEncoder.EncodeULong(buffer[offset..], DescriptorCode);
         offset += AmqpEncoder.EncodeListHeader(buffer[offset..], 0, 0);
@@ -254,43 +284,58 @@ public sealed class Modified : DeliveryState
     public override ulong DescriptorCode => Descriptor.Modified;
 
     public bool DeliveryFailed { get; init; }
+
     public bool UndeliverableHere { get; init; }
+
     public IReadOnlyDictionary<string, object?>? MessageAnnotations { get; init; }
 
     public override int Encode(Span<byte> buffer)
     {
-        int offset = 0;
+        var offset = 0;
         buffer[offset++] = FormatCode.Described;
         offset += AmqpEncoder.EncodeULong(buffer[offset..], DescriptorCode);
-
-        int fieldCount = GetFieldCount();
+        var fieldCount = GetFieldCount();
         Span<byte> body = stackalloc byte[64];
-        int bodySize = 0;
-
+        var bodySize = 0;
         if (fieldCount > 0)
+        {
             bodySize += AmqpEncoder.EncodeBoolean(body[bodySize..], DeliveryFailed);
+        }
         if (fieldCount > 1)
+        {
             bodySize += AmqpEncoder.EncodeBoolean(body[bodySize..], UndeliverableHere);
+        }
         if (fieldCount > 2)
         {
             if (MessageAnnotations != null)
+            {
                 bodySize += AmqpEncoder.EncodeMap(body[bodySize..], MessageAnnotations);
+            }
             else
+            {
                 bodySize += AmqpEncoder.EncodeNull(body[bodySize..]);
+            }
         }
-
         offset += AmqpEncoder.EncodeListHeader(buffer[offset..], bodySize, fieldCount);
         body[..bodySize].CopyTo(buffer[offset..]);
         offset += bodySize;
-
         return offset;
     }
 
     private int GetFieldCount()
     {
-        if (MessageAnnotations != null) return 3;
-        if (UndeliverableHere) return 2;
-        if (DeliveryFailed) return 1;
+        if (MessageAnnotations != null)
+        {
+            return 3;
+        }
+        if (UndeliverableHere)
+        {
+            return 2;
+        }
+        if (DeliveryFailed)
+        {
+            return 1;
+        }
         return 0;
     }
 }
@@ -301,51 +346,62 @@ public sealed class Modified : DeliveryState
 public sealed class AmqpError
 {
     public required string Condition { get; init; }
+
     public string? Description { get; init; }
+
     public IReadOnlyDictionary<string, object?>? Info { get; init; }
 
     public int Encode(Span<byte> buffer)
     {
-        int offset = 0;
+        var offset = 0;
         buffer[offset++] = FormatCode.Described;
         offset += AmqpEncoder.EncodeULong(buffer[offset..], Descriptor.Error);
-
-        int fieldCount = GetFieldCount();
+        var fieldCount = GetFieldCount();
         Span<byte> body = stackalloc byte[512];
-        int bodySize = 0;
+        var bodySize = 0;
 
         // Field 0: condition (mandatory)
         bodySize += AmqpEncoder.EncodeSymbol(body[bodySize..], Condition);
-
         if (fieldCount > 1)
         {
             // Field 1: description
             if (Description != null)
+            {
                 bodySize += AmqpEncoder.EncodeString(body[bodySize..], Description);
+            }
             else
+            {
                 bodySize += AmqpEncoder.EncodeNull(body[bodySize..]);
+            }
         }
-
         if (fieldCount > 2)
         {
             // Field 2: info
             if (Info != null)
+            {
                 bodySize += AmqpEncoder.EncodeMap(body[bodySize..], Info);
+            }
             else
+            {
                 bodySize += AmqpEncoder.EncodeNull(body[bodySize..]);
+            }
         }
-
         offset += AmqpEncoder.EncodeListHeader(buffer[offset..], bodySize, fieldCount);
         body[..bodySize].CopyTo(buffer[offset..]);
         offset += bodySize;
-
         return offset;
     }
 
     private int GetFieldCount()
     {
-        if (Info != null) return 3;
-        if (Description != null) return 2;
+        if (Info != null)
+        {
+            return 3;
+        }
+        if (Description != null)
+        {
+            return 2;
+        }
         return 1;
     }
 
@@ -356,28 +412,30 @@ public sealed class AmqpError
     /// </summary>
     public static AmqpError Decode(ReadOnlySpan<byte> buffer, out int bytesConsumed)
     {
-        int offset = 0;
-        
+        var offset = 0;
+
         // Skip described type constructor (0x00)
         if (buffer[offset] != FormatCode.Described)
+        {
             throw new AmqpDecodeException($"Expected described type for AmqpError, got 0x{buffer[offset]:X2}");
+        }
         offset++;
-        
+
         // Skip descriptor (ulong)
-        AmqpDecoder.DecodeULong(buffer[offset..], out int consumed);
+        AmqpDecoder.DecodeULong(buffer[offset..], out var consumed);
         offset += consumed;
-        
+
         // Decode list header
-        var (size, count) = AmqpDecoder.DecodeListHeader(buffer[offset..], out int headerSize);
+        var (size, count) = AmqpDecoder.DecodeListHeader(buffer[offset..], out var headerSize);
         offset += headerSize;
-        
         if (count < 1)
+        {
             throw new AmqpDecodeException("AmqpError requires at least condition field");
-        
+        }
+
         // Field 0: condition (symbol, mandatory)
-        string condition = AmqpDecoder.DecodeSymbol(buffer[offset..], out consumed);
+        var condition = AmqpDecoder.DecodeSymbol(buffer[offset..], out consumed);
         offset += consumed;
-        
         string? description = null;
         if (count >= 2)
         {
@@ -388,15 +446,14 @@ public sealed class AmqpError
             }
             offset += consumed;
         }
-        
+
         // Skip info field if present (field 2)
         if (count >= 3)
         {
             consumed = AmqpDecoder.SkipValue(buffer[offset..]);
             offset += consumed;
         }
-        
         bytesConsumed = offset;
-        return new AmqpError { Condition = condition, Description = description };
+        return new() { Condition = condition, Description = description };
     }
 }

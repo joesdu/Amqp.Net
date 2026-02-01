@@ -5,9 +5,7 @@ using Amqp.Net.Broker.Cluster.Configuration;
 using Amqp.Net.Broker.Cluster.Raft;
 using DotNext.Net.Cluster.Consensus.Raft;
 using DotNext.Net.Cluster.Consensus.Raft.Http;
-using DotNext.Net.Cluster.Consensus.Raft.Membership;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Connections;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -40,14 +38,13 @@ public static class ServiceCollectionExtensions
         // Configure cluster membership storage
         var clusterSection = configuration.GetSection(BrokerClusterOptions.SectionName);
         var seedNodes = clusterSection.GetSection("SeedNodes").Get<string[]>() ?? [];
-
         services.UseInMemoryConfigurationStorage(members =>
         {
             foreach (var seedNode in seedNodes)
             {
                 if (Uri.TryCreate(seedNode, UriKind.Absolute, out var uri))
                 {
-                    members.Add(new UriEndPoint(uri));
+                    members.Add(new(uri));
                 }
             }
         });
@@ -62,7 +59,6 @@ public static class ServiceCollectionExtensions
 
         // Add cluster configuration
         services.ConfigureCluster<BrokerClusterConfigurator>();
-
         return services;
     }
 
@@ -74,7 +70,6 @@ public static class ServiceCollectionExtensions
     public static IHostBuilder UseBrokerCluster(this IHostBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
-
         builder.JoinCluster();
         return builder;
     }
@@ -87,7 +82,6 @@ public static class ServiceCollectionExtensions
     public static WebApplicationBuilder UseBrokerCluster(this WebApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
-
         builder.JoinCluster();
         return builder;
     }

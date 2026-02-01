@@ -114,28 +114,19 @@ public readonly struct FrameHeader
     /// Creates an AMQP frame header.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static FrameHeader CreateAmqp(uint frameSize, ushort channel, byte dataOffset = 2)
-    {
-        return new FrameHeader(frameSize, dataOffset, AmqpFrameType, channel);
-    }
+    public static FrameHeader CreateAmqp(uint frameSize, ushort channel, byte dataOffset = 2) => new(frameSize, dataOffset, AmqpFrameType, channel);
 
     /// <summary>
     /// Creates a SASL frame header.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static FrameHeader CreateSasl(uint frameSize, byte dataOffset = 2)
-    {
-        return new FrameHeader(frameSize, dataOffset, SaslFrameType, 0);
-    }
+    public static FrameHeader CreateSasl(uint frameSize, byte dataOffset = 2) => new(frameSize, dataOffset, SaslFrameType, 0);
 
     /// <summary>
     /// Creates an empty AMQP frame (heartbeat).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static FrameHeader CreateHeartbeat(ushort channel = 0)
-    {
-        return new FrameHeader(Size, 2, AmqpFrameType, channel);
-    }
+    public static FrameHeader CreateHeartbeat(ushort channel = 0) => new(Size, 2, AmqpFrameType, channel);
 
     /// <summary>
     /// Reads a frame header from a buffer.
@@ -143,12 +134,11 @@ public readonly struct FrameHeader
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static FrameHeader Read(ReadOnlySpan<byte> buffer)
     {
-        uint frameSize = BinaryPrimitives.ReadUInt32BigEndian(buffer);
-        byte dataOffset = buffer[4];
-        byte frameType = buffer[5];
-        ushort channel = BinaryPrimitives.ReadUInt16BigEndian(buffer[6..]);
-        
-        return new FrameHeader(frameSize, dataOffset, frameType, channel);
+        var frameSize = BinaryPrimitives.ReadUInt32BigEndian(buffer);
+        var dataOffset = buffer[4];
+        var frameType = buffer[5];
+        var channel = BinaryPrimitives.ReadUInt16BigEndian(buffer[6..]);
+        return new(frameSize, dataOffset, frameType, channel);
     }
 
     /// <summary>
@@ -162,7 +152,6 @@ public readonly struct FrameHeader
             header = default;
             return false;
         }
-
         header = Read(buffer);
         return true;
     }
@@ -184,13 +173,12 @@ public readonly struct FrameHeader
     /// </summary>
     public override string ToString()
     {
-        string type = FrameType switch
+        var type = FrameType switch
         {
             AmqpFrameType => "AMQP",
             SaslFrameType => "SASL",
-            _ => $"0x{FrameType:X2}"
+            _             => $"0x{FrameType:X2}"
         };
-        
         return $"Frame[Size={FrameSize}, DOFF={DataOffset}, Type={type}, Channel={Channel}]";
     }
 }

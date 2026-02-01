@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Buffers.Binary;
 using Amqp.Net.Protocol.Types;
 
 namespace Amqp.Net.Protocol.Messaging;
@@ -33,51 +32,73 @@ public sealed class Header
     /// <summary>Encodes the header section.</summary>
     public int Encode(Span<byte> buffer)
     {
-        int offset = 0;
+        var offset = 0;
         buffer[offset++] = FormatCode.Described;
         offset += AmqpEncoder.EncodeULong(buffer[offset..], DescriptorCode);
-
-        int fieldCount = GetFieldCount();
+        var fieldCount = GetFieldCount();
         Span<byte> body = stackalloc byte[32];
-        int bodySize = EncodeFields(body, fieldCount);
-
+        var bodySize = EncodeFields(body, fieldCount);
         offset += AmqpEncoder.EncodeListHeader(buffer[offset..], bodySize, fieldCount);
         body[..bodySize].CopyTo(buffer[offset..]);
         offset += bodySize;
-
         return offset;
     }
 
     private int EncodeFields(Span<byte> buffer, int fieldCount)
     {
-        int offset = 0;
-
+        var offset = 0;
         if (fieldCount > 0)
+        {
             offset += AmqpEncoder.EncodeBoolean(buffer[offset..], Durable);
+        }
         if (fieldCount > 1)
+        {
             offset += AmqpEncoder.EncodeUByte(buffer[offset..], Priority);
+        }
         if (fieldCount > 2)
         {
             if (Ttl.HasValue)
+            {
                 offset += AmqpEncoder.EncodeUInt(buffer[offset..], Ttl.Value);
+            }
             else
+            {
                 offset += AmqpEncoder.EncodeNull(buffer[offset..]);
+            }
         }
         if (fieldCount > 3)
+        {
             offset += AmqpEncoder.EncodeBoolean(buffer[offset..], FirstAcquirer);
+        }
         if (fieldCount > 4)
+        {
             offset += AmqpEncoder.EncodeUInt(buffer[offset..], DeliveryCount);
-
+        }
         return offset;
     }
 
     private int GetFieldCount()
     {
-        if (DeliveryCount != 0) return 5;
-        if (FirstAcquirer) return 4;
-        if (Ttl.HasValue) return 3;
-        if (Priority != 4) return 2;
-        if (Durable) return 1;
+        if (DeliveryCount != 0)
+        {
+            return 5;
+        }
+        if (FirstAcquirer)
+        {
+            return 4;
+        }
+        if (Ttl.HasValue)
+        {
+            return 3;
+        }
+        if (Priority != 4)
+        {
+            return 2;
+        }
+        if (Durable)
+        {
+            return 1;
+        }
         return 0;
     }
 
@@ -85,52 +106,55 @@ public sealed class Header
     public static Header Decode(ReadOnlySpan<byte> buffer, out int bytesConsumed)
     {
         // Skip descriptor (already verified by caller)
-        var (size, count) = AmqpDecoder.DecodeListHeader(buffer, out int headerSize);
+        var (size, count) = AmqpDecoder.DecodeListHeader(buffer, out var headerSize);
         bytesConsumed = headerSize + size;
-
-        int offset = headerSize;
-        bool durable = false;
+        var offset = headerSize;
+        var durable = false;
         byte priority = 4;
         uint? ttl = null;
-        bool firstAcquirer = false;
+        var firstAcquirer = false;
         uint deliveryCount = 0;
-
         if (count > 0)
         {
-            if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+            if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
+            {
                 durable = AmqpDecoder.DecodeBoolean(buffer[offset..], out consumed);
+            }
             offset += consumed;
         }
-
         if (count > 1)
         {
-            if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+            if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
+            {
                 priority = AmqpDecoder.DecodeUByte(buffer[offset..], out consumed);
+            }
             offset += consumed;
         }
-
         if (count > 2)
         {
-            if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+            if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
+            {
                 ttl = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
+            }
             offset += consumed;
         }
-
         if (count > 3)
         {
-            if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+            if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
+            {
                 firstAcquirer = AmqpDecoder.DecodeBoolean(buffer[offset..], out consumed);
+            }
             offset += consumed;
         }
-
         if (count > 4)
         {
-            if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+            if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
+            {
                 deliveryCount = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
+            }
             offset += consumed;
         }
-
-        return new Header
+        return new()
         {
             Durable = durable,
             Priority = priority,
@@ -192,97 +216,127 @@ public sealed class Properties
     /// <summary>Encodes the properties section.</summary>
     public int Encode(Span<byte> buffer)
     {
-        int offset = 0;
+        var offset = 0;
         buffer[offset++] = FormatCode.Described;
         offset += AmqpEncoder.EncodeULong(buffer[offset..], DescriptorCode);
-
-        int fieldCount = GetFieldCount();
+        var fieldCount = GetFieldCount();
         Span<byte> body = stackalloc byte[1024];
-        int bodySize = EncodeFields(body, fieldCount);
-
+        var bodySize = EncodeFields(body, fieldCount);
         offset += AmqpEncoder.EncodeListHeader(buffer[offset..], bodySize, fieldCount);
         body[..bodySize].CopyTo(buffer[offset..]);
         offset += bodySize;
-
         return offset;
     }
 
     private int EncodeFields(Span<byte> buffer, int fieldCount)
     {
-        int offset = 0;
+        var offset = 0;
 
         // Field 0: message-id
         if (fieldCount > 0)
+        {
             offset += EncodeMessageId(buffer[offset..], MessageId);
+        }
 
         // Field 1: user-id
         if (fieldCount > 1)
         {
             if (UserId != null)
+            {
                 offset += AmqpEncoder.EncodeBinary(buffer[offset..], UserId);
+            }
             else
+            {
                 offset += AmqpEncoder.EncodeNull(buffer[offset..]);
+            }
         }
 
         // Field 2: to
         if (fieldCount > 2)
+        {
             offset += AmqpEncoder.EncodeString(buffer[offset..], To);
+        }
 
         // Field 3: subject
         if (fieldCount > 3)
+        {
             offset += AmqpEncoder.EncodeString(buffer[offset..], Subject);
+        }
 
         // Field 4: reply-to
         if (fieldCount > 4)
+        {
             offset += AmqpEncoder.EncodeString(buffer[offset..], ReplyTo);
+        }
 
         // Field 5: correlation-id
         if (fieldCount > 5)
+        {
             offset += EncodeMessageId(buffer[offset..], CorrelationId);
+        }
 
         // Field 6: content-type
         if (fieldCount > 6)
+        {
             offset += AmqpEncoder.EncodeSymbol(buffer[offset..], ContentType);
+        }
 
         // Field 7: content-encoding
         if (fieldCount > 7)
+        {
             offset += AmqpEncoder.EncodeSymbol(buffer[offset..], ContentEncoding);
+        }
 
         // Field 8: absolute-expiry-time
         if (fieldCount > 8)
         {
             if (AbsoluteExpiryTime.HasValue)
+            {
                 offset += AmqpEncoder.EncodeTimestamp(buffer[offset..], AbsoluteExpiryTime.Value);
+            }
             else
+            {
                 offset += AmqpEncoder.EncodeNull(buffer[offset..]);
+            }
         }
 
         // Field 9: creation-time
         if (fieldCount > 9)
         {
             if (CreationTime.HasValue)
+            {
                 offset += AmqpEncoder.EncodeTimestamp(buffer[offset..], CreationTime.Value);
+            }
             else
+            {
                 offset += AmqpEncoder.EncodeNull(buffer[offset..]);
+            }
         }
 
         // Field 10: group-id
         if (fieldCount > 10)
+        {
             offset += AmqpEncoder.EncodeString(buffer[offset..], GroupId);
+        }
 
         // Field 11: group-sequence
         if (fieldCount > 11)
         {
             if (GroupSequence.HasValue)
+            {
                 offset += AmqpEncoder.EncodeUInt(buffer[offset..], GroupSequence.Value);
+            }
             else
+            {
                 offset += AmqpEncoder.EncodeNull(buffer[offset..]);
+            }
         }
 
         // Field 12: reply-to-group-id
         if (fieldCount > 12)
+        {
             offset += AmqpEncoder.EncodeString(buffer[offset..], ReplyToGroupId);
-
+        }
         return offset;
     }
 
@@ -290,42 +344,79 @@ public sealed class Properties
     {
         return messageId switch
         {
-            null => AmqpEncoder.EncodeNull(buffer),
+            null     => AmqpEncoder.EncodeNull(buffer),
             string s => AmqpEncoder.EncodeString(buffer, s),
             ulong ul => AmqpEncoder.EncodeULong(buffer, ul),
-            Guid g => AmqpEncoder.EncodeUuid(buffer, g),
+            Guid g   => AmqpEncoder.EncodeUuid(buffer, g),
             byte[] b => AmqpEncoder.EncodeBinary(buffer, b),
-            _ => AmqpEncoder.EncodeString(buffer, messageId.ToString())
+            _        => AmqpEncoder.EncodeString(buffer, messageId.ToString())
         };
     }
 
     private int GetFieldCount()
     {
-        if (ReplyToGroupId != null) return 13;
-        if (GroupSequence.HasValue) return 12;
-        if (GroupId != null) return 11;
-        if (CreationTime.HasValue) return 10;
-        if (AbsoluteExpiryTime.HasValue) return 9;
-        if (ContentEncoding != null) return 8;
-        if (ContentType != null) return 7;
-        if (CorrelationId != null) return 6;
-        if (ReplyTo != null) return 5;
-        if (Subject != null) return 4;
-        if (To != null) return 3;
-        if (UserId != null) return 2;
-        if (MessageId != null) return 1;
+        if (ReplyToGroupId != null)
+        {
+            return 13;
+        }
+        if (GroupSequence.HasValue)
+        {
+            return 12;
+        }
+        if (GroupId != null)
+        {
+            return 11;
+        }
+        if (CreationTime.HasValue)
+        {
+            return 10;
+        }
+        if (AbsoluteExpiryTime.HasValue)
+        {
+            return 9;
+        }
+        if (ContentEncoding != null)
+        {
+            return 8;
+        }
+        if (ContentType != null)
+        {
+            return 7;
+        }
+        if (CorrelationId != null)
+        {
+            return 6;
+        }
+        if (ReplyTo != null)
+        {
+            return 5;
+        }
+        if (Subject != null)
+        {
+            return 4;
+        }
+        if (To != null)
+        {
+            return 3;
+        }
+        if (UserId != null)
+        {
+            return 2;
+        }
+        if (MessageId != null)
+        {
+            return 1;
+        }
         return 0;
     }
 
     /// <summary>Decodes a Properties section.</summary>
     public static Properties Decode(ReadOnlySpan<byte> buffer, out int bytesConsumed)
     {
-        var (size, count) = AmqpDecoder.DecodeListHeader(buffer, out int headerSize);
+        var (size, count) = AmqpDecoder.DecodeListHeader(buffer, out var headerSize);
         bytesConsumed = headerSize + size;
-
-        int offset = headerSize;
+        var offset = headerSize;
         var props = new Properties();
-
         object? messageId = null;
         byte[]? userId = null;
         string? to = null;
@@ -339,100 +430,106 @@ public sealed class Properties
         string? groupId = null;
         uint? groupSequence = null;
         string? replyToGroupId = null;
-
         if (count > 0)
         {
-            messageId = AmqpDecoder.DecodeValue(buffer[offset..], out int consumed);
+            messageId = AmqpDecoder.DecodeValue(buffer[offset..], out var consumed);
             offset += consumed;
         }
-
         if (count > 1)
         {
-            if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+            if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
             {
                 var bin = AmqpDecoder.DecodeBinary(buffer[offset..], out consumed);
                 userId = bin.ToArray();
             }
             offset += consumed;
         }
-
         if (count > 2)
         {
-            if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+            if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
+            {
                 to = AmqpDecoder.DecodeString(buffer[offset..], out consumed);
+            }
             offset += consumed;
         }
-
         if (count > 3)
         {
-            if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+            if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
+            {
                 subject = AmqpDecoder.DecodeString(buffer[offset..], out consumed);
+            }
             offset += consumed;
         }
-
         if (count > 4)
         {
-            if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+            if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
+            {
                 replyTo = AmqpDecoder.DecodeString(buffer[offset..], out consumed);
+            }
             offset += consumed;
         }
-
         if (count > 5)
         {
-            correlationId = AmqpDecoder.DecodeValue(buffer[offset..], out int consumed);
+            correlationId = AmqpDecoder.DecodeValue(buffer[offset..], out var consumed);
             offset += consumed;
         }
-
         if (count > 6)
         {
-            if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+            if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
+            {
                 contentType = AmqpDecoder.DecodeSymbol(buffer[offset..], out consumed);
+            }
             offset += consumed;
         }
-
         if (count > 7)
         {
-            if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+            if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
+            {
                 contentEncoding = AmqpDecoder.DecodeSymbol(buffer[offset..], out consumed);
+            }
             offset += consumed;
         }
-
         if (count > 8)
         {
-            if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+            if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
+            {
                 absoluteExpiryTime = AmqpDecoder.DecodeTimestamp(buffer[offset..], out consumed);
+            }
             offset += consumed;
         }
-
         if (count > 9)
         {
-            if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+            if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
+            {
                 creationTime = AmqpDecoder.DecodeTimestamp(buffer[offset..], out consumed);
+            }
             offset += consumed;
         }
-
         if (count > 10)
         {
-            if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+            if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
+            {
                 groupId = AmqpDecoder.DecodeString(buffer[offset..], out consumed);
+            }
             offset += consumed;
         }
-
         if (count > 11)
         {
-            if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+            if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
+            {
                 groupSequence = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
+            }
             offset += consumed;
         }
-
         if (count > 12)
         {
-            if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+            if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
+            {
                 replyToGroupId = AmqpDecoder.DecodeString(buffer[offset..], out consumed);
+            }
             offset += consumed;
         }
-
-        return new Properties
+        return new()
         {
             MessageId = messageId,
             UserId = userId,
@@ -466,7 +563,7 @@ public sealed class ApplicationProperties
     /// <summary>Encodes the application properties section.</summary>
     public int Encode(Span<byte> buffer)
     {
-        int offset = 0;
+        var offset = 0;
         buffer[offset++] = FormatCode.Described;
         offset += AmqpEncoder.EncodeULong(buffer[offset..], DescriptorCode);
         offset += AmqpEncoder.EncodeMap(buffer[offset..], Map);
@@ -477,7 +574,7 @@ public sealed class ApplicationProperties
     public static ApplicationProperties Decode(ReadOnlySpan<byte> buffer, out int bytesConsumed)
     {
         var map = AmqpDecoder.DecodeMap(buffer, out bytesConsumed);
-        return new ApplicationProperties { Map = map };
+        return new() { Map = map };
     }
 }
 
@@ -495,7 +592,7 @@ public sealed class DataSection
     /// <summary>Encodes the data section.</summary>
     public int Encode(Span<byte> buffer)
     {
-        int offset = 0;
+        var offset = 0;
         buffer[offset++] = FormatCode.Described;
         offset += AmqpEncoder.EncodeULong(buffer[offset..], DescriptorCode);
         offset += AmqpEncoder.EncodeBinary(buffer[offset..], Binary.Span);
@@ -506,7 +603,7 @@ public sealed class DataSection
     public static DataSection Decode(ReadOnlySpan<byte> buffer, out int bytesConsumed)
     {
         var binary = AmqpDecoder.DecodeBinary(buffer, out bytesConsumed);
-        return new DataSection { Binary = binary.ToArray() };
+        return new() { Binary = binary.ToArray() };
     }
 }
 
@@ -524,7 +621,7 @@ public sealed class AmqpValue
     /// <summary>Encodes the value section.</summary>
     public int Encode(Span<byte> buffer)
     {
-        int offset = 0;
+        var offset = 0;
         buffer[offset++] = FormatCode.Described;
         offset += AmqpEncoder.EncodeULong(buffer[offset..], DescriptorCode);
         offset += AmqpEncoder.EncodeValue(buffer[offset..], Value);
@@ -535,7 +632,7 @@ public sealed class AmqpValue
     public static AmqpValue Decode(ReadOnlySpan<byte> buffer, out int bytesConsumed)
     {
         var value = AmqpDecoder.DecodeValue(buffer, out bytesConsumed);
-        return new AmqpValue { Value = value };
+        return new() { Value = value };
     }
 }
 
@@ -554,7 +651,7 @@ public sealed class MessageAnnotations
     /// <summary>Encodes the message annotations section.</summary>
     public int Encode(Span<byte> buffer)
     {
-        int offset = 0;
+        var offset = 0;
         buffer[offset++] = FormatCode.Described;
         offset += AmqpEncoder.EncodeULong(buffer[offset..], DescriptorCode);
         offset += AmqpEncoder.EncodeMap(buffer[offset..], Map);
@@ -565,7 +662,7 @@ public sealed class MessageAnnotations
     public static MessageAnnotations Decode(ReadOnlySpan<byte> buffer, out int bytesConsumed)
     {
         var map = AmqpDecoder.DecodeMap(buffer, out bytesConsumed);
-        return new MessageAnnotations { Map = map };
+        return new() { Map = map };
     }
 }
 
@@ -584,7 +681,7 @@ public sealed class DeliveryAnnotations
     /// <summary>Encodes the delivery annotations section.</summary>
     public int Encode(Span<byte> buffer)
     {
-        int offset = 0;
+        var offset = 0;
         buffer[offset++] = FormatCode.Described;
         offset += AmqpEncoder.EncodeULong(buffer[offset..], DescriptorCode);
         offset += AmqpEncoder.EncodeMap(buffer[offset..], Map);
@@ -595,7 +692,7 @@ public sealed class DeliveryAnnotations
     public static DeliveryAnnotations Decode(ReadOnlySpan<byte> buffer, out int bytesConsumed)
     {
         var map = AmqpDecoder.DecodeMap(buffer, out bytesConsumed);
-        return new DeliveryAnnotations { Map = map };
+        return new() { Map = map };
     }
 }
 
@@ -614,7 +711,7 @@ public sealed class Footer
     /// <summary>Encodes the footer section.</summary>
     public int Encode(Span<byte> buffer)
     {
-        int offset = 0;
+        var offset = 0;
         buffer[offset++] = FormatCode.Described;
         offset += AmqpEncoder.EncodeULong(buffer[offset..], DescriptorCode);
         offset += AmqpEncoder.EncodeMap(buffer[offset..], Map);
@@ -625,6 +722,6 @@ public sealed class Footer
     public static Footer Decode(ReadOnlySpan<byte> buffer, out int bytesConsumed)
     {
         var map = AmqpDecoder.DecodeMap(buffer, out bytesConsumed);
-        return new Footer { Map = map };
+        return new() { Map = map };
     }
 }

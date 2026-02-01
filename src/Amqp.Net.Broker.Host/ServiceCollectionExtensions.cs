@@ -8,9 +8,8 @@ using Amqp.Net.Broker.Server.Configuration;
 using Amqp.Net.Broker.Server.Connections;
 using Amqp.Net.Broker.Server.Handlers;
 using Amqp.Net.Broker.Server.Transport;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Amqp.Net.Broker.Host;
 
@@ -38,16 +37,16 @@ internal static class ServiceCollectionExtensions
 
         // Configure server options from broker options
         services.AddOptions<AmqpServerOptions>()
-            .Configure<Microsoft.Extensions.Options.IOptions<BrokerOptions>>((serverOptions, brokerOptions) =>
-            {
-                var broker = brokerOptions.Value;
-                serverOptions.ClearListenEndpoints();
-                serverOptions.AddListenEndpoint(broker.GetListenEndpoint());
-                serverOptions.MaxConnections = broker.MaxConnections;
-                serverOptions.MaxFrameSize = broker.MaxFrameSize;
-                serverOptions.IdleTimeoutMs = broker.IdleTimeoutMs;
-                serverOptions.ContainerId = broker.Name;
-            });
+                .Configure<IOptions<BrokerOptions>>((serverOptions, brokerOptions) =>
+                {
+                    var broker = brokerOptions.Value;
+                    serverOptions.ClearListenEndpoints();
+                    serverOptions.AddListenEndpoint(broker.GetListenEndpoint());
+                    serverOptions.MaxConnections = broker.MaxConnections;
+                    serverOptions.MaxFrameSize = broker.MaxFrameSize;
+                    serverOptions.IdleTimeoutMs = broker.IdleTimeoutMs;
+                    serverOptions.ContainerId = broker.Name;
+                });
 
         // Register core services
         services.TryAddSingleton<IMessageStore, InMemoryMessageStore>();
@@ -61,7 +60,6 @@ internal static class ServiceCollectionExtensions
 
         // Register hosted service
         services.AddHostedService<BrokerHostedService>();
-
         return services;
     }
 

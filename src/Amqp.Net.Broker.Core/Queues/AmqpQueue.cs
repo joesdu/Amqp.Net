@@ -14,12 +14,12 @@ namespace Amqp.Net.Broker.Core.Queues;
 public sealed class AmqpQueue : IQueue, IAsyncDisposable
 #pragma warning restore CA1711
 {
+    private readonly ConcurrentDictionary<long, StoredMessage> _allMessages = new();
     private readonly Channel<StoredMessage> _channel;
     private readonly ConcurrentDictionary<long, StoredMessage> _unackedMessages = new();
-    private readonly ConcurrentDictionary<long, StoredMessage> _allMessages = new();
     private int _consumerCount;
-    private long _totalSizeBytes;
     private bool _disposed;
+    private long _totalSizeBytes;
 
     /// <summary>
     /// Creates a new queue with the specified name and options.
@@ -27,27 +27,41 @@ public sealed class AmqpQueue : IQueue, IAsyncDisposable
     public AmqpQueue(string name, QueueOptions? options = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
         Name = name;
         Options = options ?? QueueOptions.Default;
 
         // Configure channel based on options
         var channelOptions = Options.MaxLength.HasValue
-            ? new BoundedChannelOptions(Options.MaxLength.Value)
-            {
-                FullMode = BoundedChannelFullMode.Wait,
-                SingleReader = false,
-                SingleWriter = false
-            }
-            : (ChannelOptions)new UnboundedChannelOptions
-            {
-                SingleReader = false,
-                SingleWriter = false
-            };
-
+                                 ? new BoundedChannelOptions(Options.MaxLength.Value)
+                                 {
+                                     FullMode = BoundedChannelFullMode.Wait,
+                                     SingleReader = false,
+                                     SingleWriter = false
+                                 }
+                                 : (ChannelOptions)new UnboundedChannelOptions
+                                 {
+                                     SingleReader = false,
+                                     SingleWriter = false
+                                 };
         _channel = Options.MaxLength.HasValue
-            ? Channel.CreateBounded<StoredMessage>((BoundedChannelOptions)channelOptions)
-            : Channel.CreateUnbounded<StoredMessage>((UnboundedChannelOptions)channelOptions);
+                       ? Channel.CreateBounded<StoredMessage>((BoundedChannelOptions)channelOptions)
+                       : Channel.CreateUnbounded<StoredMessage>((UnboundedChannelOptions)channelOptions);
+    }
+
+    /// <summary>
+    /// Disposes the queue.
+    /// </summary>
+    public ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return ValueTask.CompletedTask;
+        }
+        _disposed = true;
+        _channel.Writer.Complete();
+        _allMessages.Clear();
+        _unackedMessages.Clear();
+        return ValueTask.CompletedTask;
     }
 
     /// <inheritdoc />
@@ -72,7 +86,7 @@ public sealed class AmqpQueue : IQueue, IAsyncDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         // Check size limit
-        if (Options.MaxLengthBytes.HasValue && 
+        if (Options.MaxLengthBytes.HasValue &&
             Interlocked.Read(ref _totalSizeBytes) + message.Body.Length > Options.MaxLengthBytes.Value)
         {
             return false;
@@ -84,7 +98,6 @@ public sealed class AmqpQueue : IQueue, IAsyncDisposable
         {
             finalMessage = message with { ExpiresAt = DateTimeOffset.UtcNow + Options.MessageTtl.Value };
         }
-
         try
         {
             await _channel.Writer.WriteAsync(finalMessage, cancellationToken).ConfigureAwait(false);
@@ -102,7 +115,6 @@ public sealed class AmqpQueue : IQueue, IAsyncDisposable
     public async ValueTask<StoredMessage?> DequeueAsync(CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-
         try
         {
             while (await _channel.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
@@ -120,7 +132,6 @@ public sealed class AmqpQueue : IQueue, IAsyncDisposable
                     // Track as unacknowledged
                     var deliveredMessage = message with { DeliveryCount = message.DeliveryCount + 1 };
                     _unackedMessages.TryAdd(deliveredMessage.MessageId, deliveredMessage);
-                    
                     return deliveredMessage;
                 }
             }
@@ -129,7 +140,6 @@ public sealed class AmqpQueue : IQueue, IAsyncDisposable
         {
             // Queue was closed
         }
-
         return null;
     }
 
@@ -137,12 +147,10 @@ public sealed class AmqpQueue : IQueue, IAsyncDisposable
     public ValueTask<StoredMessage?> PeekAsync(CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-
         if (_channel.Reader.TryPeek(out var message))
         {
             return ValueTask.FromResult<StoredMessage?>(message);
         }
-
         return ValueTask.FromResult<StoredMessage?>(null);
     }
 
@@ -150,14 +158,12 @@ public sealed class AmqpQueue : IQueue, IAsyncDisposable
     public ValueTask<bool> AcknowledgeAsync(long messageId, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-
         if (_unackedMessages.TryRemove(messageId, out var message))
         {
             _allMessages.TryRemove(messageId, out _);
             Interlocked.Add(ref _totalSizeBytes, -message.Body.Length);
             return ValueTask.FromResult(true);
         }
-
         return ValueTask.FromResult(false);
     }
 
@@ -165,12 +171,10 @@ public sealed class AmqpQueue : IQueue, IAsyncDisposable
     public async ValueTask<bool> RejectAsync(long messageId, bool requeue, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-
         if (!_unackedMessages.TryRemove(messageId, out var message))
         {
             return false;
         }
-
         if (requeue && !message.IsExpired)
         {
             // Requeue at the front (by writing back to channel)
@@ -191,7 +195,6 @@ public sealed class AmqpQueue : IQueue, IAsyncDisposable
             _allMessages.TryRemove(messageId, out _);
             Interlocked.Add(ref _totalSizeBytes, -message.Body.Length);
         }
-
         return true;
     }
 
@@ -199,15 +202,13 @@ public sealed class AmqpQueue : IQueue, IAsyncDisposable
     public ValueTask<int> PurgeAsync(CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-
-        int count = 0;
+        var count = 0;
         while (_channel.Reader.TryRead(out var message))
         {
             _allMessages.TryRemove(message.MessageId, out _);
             Interlocked.Add(ref _totalSizeBytes, -message.Body.Length);
             count++;
         }
-
         return ValueTask.FromResult(count);
     }
 
@@ -221,23 +222,5 @@ public sealed class AmqpQueue : IQueue, IAsyncDisposable
     public void RemoveConsumer()
     {
         Interlocked.Decrement(ref _consumerCount);
-    }
-
-    /// <summary>
-    /// Disposes the queue.
-    /// </summary>
-    public ValueTask DisposeAsync()
-    {
-        if (_disposed)
-        {
-            return ValueTask.CompletedTask;
-        }
-
-        _disposed = true;
-        _channel.Writer.Complete();
-        _allMessages.Clear();
-        _unackedMessages.Clear();
-
-        return ValueTask.CompletedTask;
     }
 }

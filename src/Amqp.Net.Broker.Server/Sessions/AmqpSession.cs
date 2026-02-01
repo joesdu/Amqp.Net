@@ -4,12 +4,10 @@
 using System.Collections.Concurrent;
 using Amqp.Net.Broker.Server.Connections;
 using Amqp.Net.Broker.Server.Exceptions;
-using Amqp.Net.Broker.Server.Handlers;
 using Amqp.Net.Broker.Server.Links;
 using Amqp.Net.Broker.Server.Logging;
 using Amqp.Net.Broker.Server.Transport;
 using Amqp.Net.Protocol.Performatives;
-using Amqp.Net.Protocol.Types;
 using Microsoft.Extensions.Logging;
 
 namespace Amqp.Net.Broker.Server.Sessions;
@@ -20,24 +18,14 @@ namespace Amqp.Net.Broker.Server.Sessions;
 /// </summary>
 public sealed class AmqpSession
 {
-    private readonly AmqpConnection _connection;
     private readonly FrameWriter _frameWriter;
-    private readonly ILogger _logger;
     private readonly ConcurrentDictionary<uint, AmqpLink> _localLinks = new();
+    private readonly ILogger _logger;
     private readonly ConcurrentDictionary<uint, AmqpLink> _remoteLinks = new();
-    
-    private AmqpSessionState _state = AmqpSessionState.Unmapped;
-    private Begin? _remoteBegin;
-    private Begin? _localBegin;
-    
+
     // Flow control state
-    private uint _nextOutgoingId;
-    private uint _nextIncomingId;
-    private uint _incomingWindow;
-    private uint _outgoingWindow;
     private uint _remoteIncomingWindow;
     private uint _remoteOutgoingWindow;
-    private uint _handleMax;
 
     /// <summary>
     /// Creates a new AMQP session.
@@ -48,16 +36,16 @@ public sealed class AmqpSession
         FrameWriter frameWriter,
         ILogger logger)
     {
-        _connection = connection;
+        Connection = connection;
         LocalChannel = localChannel;
         _frameWriter = frameWriter;
         _logger = logger;
-        
+
         // Default window sizes
-        _incomingWindow = 2048;
-        _outgoingWindow = 2048;
-        _handleMax = uint.MaxValue;
-        _nextOutgoingId = 0;
+        IncomingWindow = 2048;
+        OutgoingWindow = 2048;
+        HandleMax = uint.MaxValue;
+        NextOutgoingId = 0;
     }
 
     /// <summary>
@@ -73,47 +61,47 @@ public sealed class AmqpSession
     /// <summary>
     /// Gets the current session state.
     /// </summary>
-    public AmqpSessionState State => _state;
+    public AmqpSessionState State { get; private set; } = AmqpSessionState.Unmapped;
 
     /// <summary>
     /// Gets the remote Begin performative.
     /// </summary>
-    public Begin? RemoteBegin => _remoteBegin;
+    public Begin? RemoteBegin { get; private set; }
 
     /// <summary>
     /// Gets the local Begin performative.
     /// </summary>
-    public Begin? LocalBegin => _localBegin;
+    public Begin? LocalBegin { get; private set; }
 
     /// <summary>
     /// Gets the connection this session belongs to.
     /// </summary>
-    public AmqpConnection Connection => _connection;
+    public AmqpConnection Connection { get; }
 
     /// <summary>
     /// Gets the next outgoing transfer ID.
     /// </summary>
-    public uint NextOutgoingId => _nextOutgoingId;
+    public uint NextOutgoingId { get; private set; }
 
     /// <summary>
     /// Gets the next expected incoming transfer ID.
     /// </summary>
-    public uint NextIncomingId => _nextIncomingId;
+    public uint NextIncomingId { get; private set; }
 
     /// <summary>
     /// Gets the incoming window size.
     /// </summary>
-    public uint IncomingWindow => _incomingWindow;
+    public uint IncomingWindow { get; private set; }
 
     /// <summary>
     /// Gets the outgoing window size.
     /// </summary>
-    public uint OutgoingWindow => _outgoingWindow;
+    public uint OutgoingWindow { get; private set; }
 
     /// <summary>
     /// Gets the maximum handle number.
     /// </summary>
-    public uint HandleMax => _handleMax;
+    public uint HandleMax { get; private set; }
 
     /// <summary>
     /// Gets all links in this session.
@@ -125,42 +113,37 @@ public sealed class AmqpSession
     /// </summary>
     internal async Task HandleBeginAsync(Begin begin, CancellationToken cancellationToken)
     {
-        if (_state != AmqpSessionState.Unmapped && _state != AmqpSessionState.BeginSent)
+        if (State != AmqpSessionState.Unmapped && State != AmqpSessionState.BeginSent)
         {
-            throw new AmqpConnectionException($"Received Begin in invalid session state: {_state}");
+            throw new AmqpConnectionException($"Received Begin in invalid session state: {State}");
         }
-
-        _remoteBegin = begin;
+        RemoteBegin = begin;
         RemoteChannel = begin.RemoteChannel;
-        
+
         // Store remote flow control parameters
-        _nextIncomingId = begin.NextOutgoingId;
+        NextIncomingId = begin.NextOutgoingId;
         _remoteIncomingWindow = begin.IncomingWindow;
         _remoteOutgoingWindow = begin.OutgoingWindow;
-        
-        if (begin.HandleMax < _handleMax)
+        if (begin.HandleMax < HandleMax)
         {
-            _handleMax = begin.HandleMax;
+            HandleMax = begin.HandleMax;
         }
-
-        Log.SessionBeginProcessed(_logger, _connection.ConnectionId, LocalChannel, 
+        Log.SessionBeginProcessed(_logger, Connection.ConnectionId, LocalChannel,
             begin.NextOutgoingId, begin.IncomingWindow, begin.OutgoingWindow);
 
         // Send our Begin response
-        _localBegin = new Begin
+        LocalBegin = new()
         {
             RemoteChannel = LocalChannel,
-            NextOutgoingId = _nextOutgoingId,
-            IncomingWindow = _incomingWindow,
-            OutgoingWindow = _outgoingWindow,
-            HandleMax = _handleMax
+            NextOutgoingId = NextOutgoingId,
+            IncomingWindow = IncomingWindow,
+            OutgoingWindow = OutgoingWindow,
+            HandleMax = HandleMax
         };
-
-        await _frameWriter.WriteFrameAsync(LocalChannel, _localBegin, cancellationToken)
-            .ConfigureAwait(false);
-
-        _state = AmqpSessionState.Mapped;
-        Log.SessionMapped(_logger, _connection.ConnectionId, LocalChannel, RemoteChannel);
+        await _frameWriter.WriteFrameAsync(LocalChannel, LocalBegin, cancellationToken)
+                          .ConfigureAwait(false);
+        State = AmqpSessionState.Mapped;
+        Log.SessionMapped(_logger, Connection.ConnectionId, LocalChannel, RemoteChannel);
     }
 
     /// <summary>
@@ -168,23 +151,20 @@ public sealed class AmqpSession
     /// </summary>
     internal async Task HandleEndAsync(End end, CancellationToken cancellationToken)
     {
-        Log.SessionEndProcessed(_logger, _connection.ConnectionId, LocalChannel, end.Error?.Condition);
-
-        if (_state == AmqpSessionState.EndSent)
+        Log.SessionEndProcessed(_logger, Connection.ConnectionId, LocalChannel, end.Error?.Condition);
+        if (State == AmqpSessionState.EndSent)
         {
             // We already sent End, just transition to Discarding
-            _state = AmqpSessionState.Discarding;
+            State = AmqpSessionState.Discarding;
         }
         else
         {
             // Send End response
-            _state = AmqpSessionState.EndReceived;
-            
+            State = AmqpSessionState.EndReceived;
             var response = new End();
             await _frameWriter.WriteFrameAsync(LocalChannel, response, cancellationToken)
-                .ConfigureAwait(false);
-            
-            _state = AmqpSessionState.Discarding;
+                              .ConfigureAwait(false);
+            State = AmqpSessionState.Discarding;
         }
 
         // Close all links
@@ -194,8 +174,7 @@ public sealed class AmqpSession
         }
         _localLinks.Clear();
         _remoteLinks.Clear();
-
-        Log.SessionEnded(_logger, _connection.ConnectionId, LocalChannel);
+        Log.SessionEnded(_logger, Connection.ConnectionId, LocalChannel);
     }
 
     /// <summary>
@@ -203,9 +182,9 @@ public sealed class AmqpSession
     /// </summary>
     internal async Task HandleAttachAsync(Attach attach, CancellationToken cancellationToken)
     {
-        if (!_state.IsOperational())
+        if (!State.IsOperational())
         {
-            throw new AmqpConnectionException($"Received Attach in invalid session state: {_state}");
+            throw new AmqpConnectionException($"Received Attach in invalid session state: {State}");
         }
 
         // Find or create link
@@ -213,15 +192,14 @@ public sealed class AmqpSession
         {
             // New link from remote
             var localHandle = AllocateHandle();
-            link = new AmqpLink(this, attach.Name, localHandle, attach.Handle, attach.Role, _frameWriter, _logger);
+            link = new(this, attach.Name, localHandle, attach.Handle, attach.Role, _frameWriter, _logger);
             _localLinks.TryAdd(localHandle, link);
             _remoteLinks.TryAdd(attach.Handle, link);
         }
-
         await link.HandleAttachAsync(attach, cancellationToken).ConfigureAwait(false);
 
         // Notify broker link handler
-        _connection.LinkHandler?.OnLinkAttached(link);
+        Connection.LinkHandler?.OnLinkAttached(link);
     }
 
     /// <summary>
@@ -231,13 +209,12 @@ public sealed class AmqpSession
     {
         if (!_remoteLinks.TryGetValue(detach.Handle, out var link))
         {
-            Log.LinkNotFound(_logger, _connection.ConnectionId, LocalChannel, detach.Handle);
+            Log.LinkNotFound(_logger, Connection.ConnectionId, LocalChannel, detach.Handle);
             return;
         }
 
         // Notify broker link handler before detaching
-        _connection.LinkHandler?.OnLinkDetached(link);
-
+        Connection.LinkHandler?.OnLinkDetached(link);
         await link.HandleDetachAsync(detach, cancellationToken).ConfigureAwait(false);
 
         // Remove link if closed
@@ -256,9 +233,8 @@ public sealed class AmqpSession
         // Update session-level flow control
         if (flow.NextIncomingId.HasValue)
         {
-            _remoteIncomingWindow = flow.NextIncomingId.Value + flow.IncomingWindow - _nextOutgoingId;
+            _remoteIncomingWindow = (flow.NextIncomingId.Value + flow.IncomingWindow) - NextOutgoingId;
         }
-        
         _remoteOutgoingWindow = flow.OutgoingWindow;
 
         // If handle is specified, route to link
@@ -266,10 +242,8 @@ public sealed class AmqpSession
         {
             return link.HandleFlowAsync(flow, cancellationToken);
         }
-
-        Log.SessionFlowUpdated(_logger, _connection.ConnectionId, LocalChannel, 
+        Log.SessionFlowUpdated(_logger, Connection.ConnectionId, LocalChannel,
             _remoteIncomingWindow, _remoteOutgoingWindow);
-
         return Task.CompletedTask;
     }
 
@@ -279,15 +253,13 @@ public sealed class AmqpSession
     internal Task HandleTransferAsync(Transfer transfer, ReadOnlyMemory<byte> payload, CancellationToken cancellationToken)
     {
         // Update incoming window
-        _nextIncomingId++;
-        _incomingWindow--;
-
+        NextIncomingId++;
+        IncomingWindow--;
         if (!_remoteLinks.TryGetValue(transfer.Handle, out var link))
         {
-            Log.LinkNotFound(_logger, _connection.ConnectionId, LocalChannel, transfer.Handle);
+            Log.LinkNotFound(_logger, Connection.ConnectionId, LocalChannel, transfer.Handle);
             return Task.CompletedTask;
         }
-
         return link.HandleTransferAsync(transfer, payload, cancellationToken);
     }
 
@@ -304,7 +276,6 @@ public sealed class AmqpSession
                 link.HandleDisposition(disposition);
             }
         }
-
         return Task.CompletedTask;
     }
 
@@ -313,24 +284,23 @@ public sealed class AmqpSession
     /// </summary>
     public async Task EndAsync(string? errorCondition = null, string? errorDescription = null, CancellationToken cancellationToken = default)
     {
-        if (_state.IsTerminal() || _state == AmqpSessionState.EndSent || _state == AmqpSessionState.EndReceived)
+        if (State.IsTerminal() || State == AmqpSessionState.EndSent || State == AmqpSessionState.EndReceived)
         {
             return;
         }
-
-        _state = AmqpSessionState.EndSent;
-
+        State = AmqpSessionState.EndSent;
         var end = new End
         {
-            Error = errorCondition != null ? new AmqpError
-            {
-                Condition = errorCondition,
-                Description = errorDescription
-            } : null
+            Error = errorCondition != null
+                        ? new AmqpError
+                        {
+                            Condition = errorCondition,
+                            Description = errorDescription
+                        }
+                        : null
         };
-
         await _frameWriter.WriteFrameAsync(LocalChannel, end, cancellationToken).ConfigureAwait(false);
-        Log.SessionEndSent(_logger, _connection.ConnectionId, LocalChannel);
+        Log.SessionEndSent(_logger, Connection.ConnectionId, LocalChannel);
     }
 
     /// <summary>
@@ -344,7 +314,7 @@ public sealed class AmqpSession
 
     private uint AllocateHandle()
     {
-        for (uint i = 0; i <= _handleMax; i++)
+        for (uint i = 0; i <= HandleMax; i++)
         {
             if (!_localLinks.ContainsKey(i))
             {
@@ -361,12 +331,11 @@ public sealed class AmqpSession
     {
         var flow = new Flow
         {
-            NextIncomingId = _nextIncomingId,
-            IncomingWindow = _incomingWindow,
-            NextOutgoingId = _nextOutgoingId,
-            OutgoingWindow = _outgoingWindow
+            NextIncomingId = NextIncomingId,
+            IncomingWindow = IncomingWindow,
+            NextOutgoingId = NextOutgoingId,
+            OutgoingWindow = OutgoingWindow
         };
-
         await _frameWriter.WriteFrameAsync(LocalChannel, flow, cancellationToken).ConfigureAwait(false);
     }
 
@@ -396,14 +365,13 @@ public sealed class AmqpSession
             Settled = false,
             More = false
         };
-
         await _frameWriter.WriteFrameAsync(LocalChannel, transfer, payload, cancellationToken)
-            .ConfigureAwait(false);
-
-        _nextOutgoingId++;
-        if (_outgoingWindow > 0)
-            _outgoingWindow--;
-
-        Log.TransferSent(_logger, _connection.ConnectionId, LocalChannel, handle, deliveryId, payload.Length);
+                          .ConfigureAwait(false);
+        NextOutgoingId++;
+        if (OutgoingWindow > 0)
+        {
+            OutgoingWindow--;
+        }
+        Log.TransferSent(_logger, Connection.ConnectionId, LocalChannel, handle, deliveryId, payload.Length);
     }
 }

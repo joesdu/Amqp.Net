@@ -72,30 +72,31 @@ public sealed record Flow : PerformativeBase
     /// <inheritdoc />
     public override int Encode(Span<byte> buffer)
     {
-        int offset = 0;
+        var offset = 0;
         buffer[offset++] = FormatCode.Described;
         offset += AmqpEncoder.EncodeULong(buffer[offset..], DescriptorCode);
-
-        int fieldCount = GetFieldCount();
+        var fieldCount = GetFieldCount();
         Span<byte> body = stackalloc byte[128];
-        int bodySize = EncodeFields(body, fieldCount);
-
+        var bodySize = EncodeFields(body, fieldCount);
         offset += AmqpEncoder.EncodeListHeader(buffer[offset..], bodySize, fieldCount);
         body[..bodySize].CopyTo(buffer[offset..]);
         offset += bodySize;
-
         return offset;
     }
 
     private int EncodeFields(Span<byte> buffer, int fieldCount)
     {
-        int offset = 0;
+        var offset = 0;
 
         // Field 0: next-incoming-id
         if (NextIncomingId.HasValue)
+        {
             offset += AmqpEncoder.EncodeUInt(buffer[offset..], NextIncomingId.Value);
+        }
         else
+        {
             offset += AmqpEncoder.EncodeNull(buffer[offset..]);
+        }
 
         // Field 1: incoming-window (mandatory)
         offset += AmqpEncoder.EncodeUInt(buffer[offset..], IncomingWindow);
@@ -105,66 +106,116 @@ public sealed record Flow : PerformativeBase
 
         // Field 3: outgoing-window (mandatory)
         offset += AmqpEncoder.EncodeUInt(buffer[offset..], OutgoingWindow);
-
-        if (fieldCount <= 4) return offset;
+        if (fieldCount <= 4)
+        {
+            return offset;
+        }
 
         // Field 4: handle
         if (Handle.HasValue)
+        {
             offset += AmqpEncoder.EncodeUInt(buffer[offset..], Handle.Value);
+        }
         else
+        {
             offset += AmqpEncoder.EncodeNull(buffer[offset..]);
-
-        if (fieldCount <= 5) return offset;
+        }
+        if (fieldCount <= 5)
+        {
+            return offset;
+        }
 
         // Field 5: delivery-count
         if (DeliveryCount.HasValue)
+        {
             offset += AmqpEncoder.EncodeUInt(buffer[offset..], DeliveryCount.Value);
+        }
         else
+        {
             offset += AmqpEncoder.EncodeNull(buffer[offset..]);
-
-        if (fieldCount <= 6) return offset;
+        }
+        if (fieldCount <= 6)
+        {
+            return offset;
+        }
 
         // Field 6: link-credit
         if (LinkCredit.HasValue)
+        {
             offset += AmqpEncoder.EncodeUInt(buffer[offset..], LinkCredit.Value);
+        }
         else
+        {
             offset += AmqpEncoder.EncodeNull(buffer[offset..]);
-
-        if (fieldCount <= 7) return offset;
+        }
+        if (fieldCount <= 7)
+        {
+            return offset;
+        }
 
         // Field 7: available
         if (Available.HasValue)
+        {
             offset += AmqpEncoder.EncodeUInt(buffer[offset..], Available.Value);
+        }
         else
+        {
             offset += AmqpEncoder.EncodeNull(buffer[offset..]);
-
-        if (fieldCount <= 8) return offset;
+        }
+        if (fieldCount <= 8)
+        {
+            return offset;
+        }
 
         // Field 8: drain
         offset += AmqpEncoder.EncodeBoolean(buffer[offset..], Drain);
-
-        if (fieldCount <= 9) return offset;
+        if (fieldCount <= 9)
+        {
+            return offset;
+        }
 
         // Field 9: echo
         offset += AmqpEncoder.EncodeBoolean(buffer[offset..], Echo);
-
-        if (fieldCount <= 10) return offset;
+        if (fieldCount <= 10)
+        {
+            return offset;
+        }
 
         // Field 10: properties
         offset += AmqpEncoder.EncodeNull(buffer[offset..]);
-
         return offset;
     }
 
     private int GetFieldCount()
     {
-        if (Properties != null) return 11;
-        if (Echo) return 10;
-        if (Drain) return 9;
-        if (Available.HasValue) return 8;
-        if (LinkCredit.HasValue) return 7;
-        if (DeliveryCount.HasValue) return 6;
-        if (Handle.HasValue) return 5;
+        if (Properties != null)
+        {
+            return 11;
+        }
+        if (Echo)
+        {
+            return 10;
+        }
+        if (Drain)
+        {
+            return 9;
+        }
+        if (Available.HasValue)
+        {
+            return 8;
+        }
+        if (LinkCredit.HasValue)
+        {
+            return 7;
+        }
+        if (DeliveryCount.HasValue)
+        {
+            return 6;
+        }
+        if (Handle.HasValue)
+        {
+            return 5;
+        }
         return 4;
     }
 
@@ -176,33 +227,34 @@ public sealed record Flow : PerformativeBase
     /// </summary>
     public static Flow Decode(ReadOnlySpan<byte> buffer, out int listSize, out int bytesConsumed)
     {
-        var (size, count) = AmqpDecoder.DecodeListHeader(buffer, out int headerSize);
+        var (size, count) = AmqpDecoder.DecodeListHeader(buffer, out var headerSize);
         listSize = size;
         bytesConsumed = headerSize + size;
-
         if (count < 4)
+        {
             throw new AmqpDecodeException("Flow requires at least 4 fields");
-
-        int offset = headerSize;
+        }
+        var offset = headerSize;
 
         // Field 0: next-incoming-id
         uint? nextIncomingId = null;
-        if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+        if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
+        {
             nextIncomingId = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
+        }
         offset += consumed;
 
         // Field 1: incoming-window
-        uint incomingWindow = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
+        var incomingWindow = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
         offset += consumed;
 
         // Field 2: next-outgoing-id
-        uint nextOutgoingId = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
+        var nextOutgoingId = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
         offset += consumed;
 
         // Field 3: outgoing-window
-        uint outgoingWindow = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
+        var outgoingWindow = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
         offset += consumed;
-
         var flow = new Flow
         {
             NextIncomingId = nextIncomingId,
@@ -210,35 +262,45 @@ public sealed record Flow : PerformativeBase
             NextOutgoingId = nextOutgoingId,
             OutgoingWindow = outgoingWindow
         };
-
-        if (count <= 4) return flow;
+        if (count <= 4)
+        {
+            return flow;
+        }
 
         // Field 4: handle
         uint? handle = null;
         if (!AmqpDecoder.DecodeNull(buffer[offset..], out consumed))
+        {
             handle = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
+        }
         offset += consumed;
-
-        if (count <= 5) return flow with { Handle = handle };
+        if (count <= 5)
+        {
+            return flow with { Handle = handle };
+        }
 
         // Field 5: delivery-count
         uint? deliveryCount = null;
         if (!AmqpDecoder.DecodeNull(buffer[offset..], out consumed))
+        {
             deliveryCount = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
+        }
         offset += consumed;
-
-        if (count <= 6) return flow with { Handle = handle, DeliveryCount = deliveryCount };
+        if (count <= 6)
+        {
+            return flow with { Handle = handle, DeliveryCount = deliveryCount };
+        }
 
         // Field 6: link-credit
         uint? linkCredit = null;
         if (!AmqpDecoder.DecodeNull(buffer[offset..], out consumed))
+        {
             linkCredit = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
+        }
         offset += consumed;
-
         return flow with { Handle = handle, DeliveryCount = deliveryCount, LinkCredit = linkCredit };
     }
 
     /// <inheritdoc />
-    public override string ToString() =>
-        $"Flow(Handle={Handle}, DeliveryCount={DeliveryCount}, LinkCredit={LinkCredit}, Drain={Drain})";
+    public override string ToString() => $"Flow(Handle={Handle}, DeliveryCount={DeliveryCount}, LinkCredit={LinkCredit}, Drain={Drain})";
 }

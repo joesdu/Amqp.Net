@@ -27,12 +27,10 @@ public sealed class InMemoryMessageStore : IMessageStore
         ArgumentNullException.ThrowIfNull(message);
         var messageId = Interlocked.Increment(ref _nextMessageId);
         var storedMessage = message with { MessageId = messageId };
-
         if (_messages.TryAdd(messageId, storedMessage))
         {
             Interlocked.Add(ref _totalSizeBytes, storedMessage.Body.Length);
         }
-
         return ValueTask.FromResult(messageId);
     }
 
@@ -51,7 +49,6 @@ public sealed class InMemoryMessageStore : IMessageStore
             Interlocked.Add(ref _totalSizeBytes, -message.Body.Length);
             return ValueTask.FromResult(true);
         }
-
         return ValueTask.FromResult(false);
     }
 
@@ -59,11 +56,10 @@ public sealed class InMemoryMessageStore : IMessageStore
     public ValueTask<IReadOnlyList<StoredMessage>> GetByQueueAsync(string queueName, int maxCount, CancellationToken cancellationToken = default)
     {
         var messages = _messages.Values
-            .Where(m => m.QueueName == queueName && !m.IsExpired)
-            .OrderBy(m => m.EnqueuedAt)
-            .Take(maxCount)
-            .ToList();
-
+                                .Where(m => m.QueueName == queueName && !m.IsExpired)
+                                .OrderBy(m => m.EnqueuedAt)
+                                .Take(maxCount)
+                                .ToList();
         return ValueTask.FromResult<IReadOnlyList<StoredMessage>>(messages);
     }
 
@@ -74,11 +70,10 @@ public sealed class InMemoryMessageStore : IMessageStore
     public int PurgeExpired()
     {
         var expiredIds = _messages
-            .Where(kvp => kvp.Value.IsExpired)
-            .Select(kvp => kvp.Key)
-            .ToList();
-
-        int removed = 0;
+                         .Where(kvp => kvp.Value.IsExpired)
+                         .Select(kvp => kvp.Key)
+                         .ToList();
+        var removed = 0;
         foreach (var id in expiredIds)
         {
             if (_messages.TryRemove(id, out var message))
@@ -87,7 +82,6 @@ public sealed class InMemoryMessageStore : IMessageStore
                 removed++;
             }
         }
-
         return removed;
     }
 

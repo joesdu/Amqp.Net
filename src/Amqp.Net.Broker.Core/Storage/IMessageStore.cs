@@ -11,6 +11,16 @@ namespace Amqp.Net.Broker.Core.Storage;
 public interface IMessageStore
 {
     /// <summary>
+    /// Gets the total number of stored messages.
+    /// </summary>
+    long MessageCount { get; }
+
+    /// <summary>
+    /// Gets the total size of stored messages in bytes.
+    /// </summary>
+    long TotalSizeBytes { get; }
+
+    /// <summary>
     /// Stores a message and returns its assigned ID.
     /// </summary>
     /// <param name="message">The message to store.</param>
@@ -42,14 +52,4 @@ public interface IMessageStore
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>List of messages.</returns>
     ValueTask<IReadOnlyList<StoredMessage>> GetByQueueAsync(string queueName, int maxCount, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Gets the total number of stored messages.
-    /// </summary>
-    long MessageCount { get; }
-
-    /// <summary>
-    /// Gets the total size of stored messages in bytes.
-    /// </summary>
-    long TotalSizeBytes { get; }
 }

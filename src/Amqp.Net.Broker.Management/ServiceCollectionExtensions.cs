@@ -21,19 +21,17 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddBrokerManagementApi(this IServiceCollection services)
     {
         services.AddControllers()
-            .AddApplicationPart(typeof(ServiceCollectionExtensions).Assembly);
-
+                .AddApplicationPart(typeof(ServiceCollectionExtensions).Assembly);
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen(options =>
         {
-            options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+            options.SwaggerDoc("v1", new()
             {
                 Title = "Amqp.Net Broker Management API",
                 Version = "v1",
                 Description = "REST API for managing the Amqp.Net message broker"
             });
         });
-
         return services;
     }
 
@@ -45,7 +43,6 @@ public static class ServiceCollectionExtensions
     public static IApplicationBuilder UseBrokerManagementApi(this IApplicationBuilder app)
     {
         ArgumentNullException.ThrowIfNull(app);
-
         app.UseRouting();
 
         // Enable Swagger in development
@@ -59,12 +56,7 @@ public static class ServiceCollectionExtensions
                 options.RoutePrefix = "swagger";
             });
         }
-
-        app.UseEndpoints(endpoints =>
-        {
-            endpoints.MapControllers();
-        });
-
+        app.UseEndpoints(endpoints => { endpoints.MapControllers(); });
         return app;
     }
 
@@ -76,7 +68,6 @@ public static class ServiceCollectionExtensions
     public static IEndpointRouteBuilder MapBrokerManagementApi(this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
-
         endpoints.MapControllers();
         return endpoints;
     }

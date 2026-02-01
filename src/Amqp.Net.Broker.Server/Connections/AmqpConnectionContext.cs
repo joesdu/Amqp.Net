@@ -27,8 +27,7 @@ public sealed class AmqpConnectionContext : IAsyncDisposable
         byte protocolId)
     {
         _socket = socket;
-        _stream = new NetworkStream(socket, ownsSocket: false);
-        
+        _stream = new(socket, false);
         ConnectionId = connectionId;
         Input = input;
         Output = output;
@@ -84,6 +83,50 @@ public sealed class AmqpConnectionContext : IAsyncDisposable
     public IDictionary<string, object?> Items { get; } = new Dictionary<string, object?>();
 
     /// <summary>
+    /// Disposes the connection context and releases resources.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+        _disposed = true;
+        try
+        {
+            await Input.CompleteAsync().ConfigureAwait(false);
+        }
+        catch (InvalidOperationException)
+        {
+            // Pipe already completed
+        }
+        try
+        {
+            await Output.CompleteAsync().ConfigureAwait(false);
+        }
+        catch (InvalidOperationException)
+        {
+            // Pipe already completed
+        }
+        try
+        {
+            await _stream.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (IOException)
+        {
+            // Stream already closed or error during close
+        }
+        try
+        {
+            _socket.Dispose();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Socket already disposed
+        }
+    }
+
+    /// <summary>
     /// Aborts the connection immediately.
     /// </summary>
     public void Abort()
@@ -103,55 +146,6 @@ public sealed class AmqpConnectionContext : IAsyncDisposable
     }
 
     /// <summary>
-    /// Disposes the connection context and releases resources.
-    /// </summary>
-    public async ValueTask DisposeAsync()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _disposed = true;
-
-        try
-        {
-            await Input.CompleteAsync().ConfigureAwait(false);
-        }
-        catch (InvalidOperationException)
-        {
-            // Pipe already completed
-        }
-
-        try
-        {
-            await Output.CompleteAsync().ConfigureAwait(false);
-        }
-        catch (InvalidOperationException)
-        {
-            // Pipe already completed
-        }
-
-        try
-        {
-            await _stream.DisposeAsync().ConfigureAwait(false);
-        }
-        catch (IOException)
-        {
-            // Stream already closed or error during close
-        }
-
-        try
-        {
-            _socket.Dispose();
-        }
-        catch (ObjectDisposedException)
-        {
-            // Socket already disposed
-        }
-    }
-
-    /// <summary>
     /// Creates a connection context from an accepted socket with pipelines.
     /// </summary>
     internal static AmqpConnectionContext Create(
@@ -161,17 +155,12 @@ public sealed class AmqpConnectionContext : IAsyncDisposable
         PipeOptions? inputOptions = null,
         PipeOptions? outputOptions = null)
     {
-        var stream = new NetworkStream(socket, ownsSocket: false);
-        
-        var reader = PipeReader.Create(stream, new StreamPipeReaderOptions(leaveOpen: true));
-        var writer = PipeWriter.Create(stream, new StreamPipeWriterOptions(leaveOpen: true));
-
-        return new AmqpConnectionContext(socket, connectionId, reader, writer, protocolId);
+        var stream = new NetworkStream(socket, false);
+        var reader = PipeReader.Create(stream, new(leaveOpen: true));
+        var writer = PipeWriter.Create(stream, new(leaveOpen: true));
+        return new(socket, connectionId, reader, writer, protocolId);
     }
 
     /// <inheritdoc />
-    public override string ToString()
-    {
-        return $"Connection[{ConnectionId}] {RemoteEndPoint} -> {LocalEndPoint}";
-    }
+    public override string ToString() => $"Connection[{ConnectionId}] {RemoteEndPoint} -> {LocalEndPoint}";
 }

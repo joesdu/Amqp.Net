@@ -17,6 +17,21 @@ public static class ProtocolHeader
     public const int Size = 8;
 
     /// <summary>
+    /// Protocol identifier for plain AMQP.
+    /// </summary>
+    public const byte ProtocolIdAmqp = 0;
+
+    /// <summary>
+    /// Protocol identifier for TLS.
+    /// </summary>
+    public const byte ProtocolIdTls = 2;
+
+    /// <summary>
+    /// Protocol identifier for SASL.
+    /// </summary>
+    public const byte ProtocolIdSasl = 3;
+
+    /// <summary>
     /// AMQP protocol identifier bytes: "AMQP"
     /// </summary>
     public static ReadOnlySpan<byte> AmqpPrefix => "AMQP"u8;
@@ -38,21 +53,6 @@ public static class ProtocolHeader
     /// Protocol-id 2 = TLS
     /// </summary>
     public static ReadOnlySpan<byte> Tls100 => [0x41, 0x4D, 0x51, 0x50, 0x02, 0x01, 0x00, 0x00];
-
-    /// <summary>
-    /// Protocol identifier for plain AMQP.
-    /// </summary>
-    public const byte ProtocolIdAmqp = 0;
-
-    /// <summary>
-    /// Protocol identifier for TLS.
-    /// </summary>
-    public const byte ProtocolIdTls = 2;
-
-    /// <summary>
-    /// Protocol identifier for SASL.
-    /// </summary>
-    public const byte ProtocolIdSasl = 3;
 
     /// <summary>
     /// Tries to parse a protocol header from the buffer.
@@ -78,7 +78,6 @@ public static class ProtocolHeader
             version = default;
             return false;
         }
-
         protocolId = buffer[4];
         version = (buffer[5], buffer[6], buffer[7]);
         return true;
@@ -92,7 +91,7 @@ public static class ProtocolHeader
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ProtocolHeaderResult Validate(ReadOnlySpan<byte> buffer)
     {
-        if (!TryParse(buffer, out byte protocolId, out var version))
+        if (!TryParse(buffer, out var protocolId, out var version))
         {
             return ProtocolHeaderResult.Invalid;
         }
@@ -102,13 +101,12 @@ public static class ProtocolHeader
         {
             return ProtocolHeaderResult.UnsupportedVersion;
         }
-
         return protocolId switch
         {
             ProtocolIdAmqp => ProtocolHeaderResult.Amqp,
             ProtocolIdSasl => ProtocolHeaderResult.Sasl,
-            ProtocolIdTls => ProtocolHeaderResult.Tls,
-            _ => ProtocolHeaderResult.UnsupportedProtocol
+            ProtocolIdTls  => ProtocolHeaderResult.Tls,
+            _              => ProtocolHeaderResult.UnsupportedProtocol
         };
     }
 
@@ -139,8 +137,8 @@ public static class ProtocolHeader
         {
             ProtocolIdAmqp => Amqp100,
             ProtocolIdSasl => Sasl100,
-            ProtocolIdTls => Tls100,
-            _ => throw new ArgumentOutOfRangeException(nameof(protocolId), $"Unknown protocol ID: {protocolId}")
+            ProtocolIdTls  => Tls100,
+            _              => throw new ArgumentOutOfRangeException(nameof(protocolId), $"Unknown protocol ID: {protocolId}")
         };
     }
 }

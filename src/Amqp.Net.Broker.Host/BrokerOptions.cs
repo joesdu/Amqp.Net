@@ -63,6 +63,6 @@ internal sealed class BrokerOptions
     public IPEndPoint GetListenEndpoint()
     {
         var address = Host == "0.0.0.0" ? IPAddress.Any : IPAddress.Parse(Host);
-        return new IPEndPoint(address, Port);
+        return new(address, Port);
     }
 }

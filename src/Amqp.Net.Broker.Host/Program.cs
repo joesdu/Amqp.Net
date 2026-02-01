@@ -13,8 +13,7 @@ builder.Host.UseSerilog((context, configuration) =>
     configuration
         .ReadFrom.Configuration(context.Configuration)
         .Enrich.FromLogContext()
-        .WriteTo.Console(
-            outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}",
+        .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}",
             formatProvider: CultureInfo.InvariantCulture);
 });
 
@@ -28,11 +27,10 @@ var app = builder.Build();
 app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Timestamp = DateTime.UtcNow }));
 
 // Metrics endpoint (if OpenTelemetry is configured)
-app.MapGet("/", () => Results.Ok(new 
-{ 
+app.MapGet("/", () => Results.Ok(new
+{
     Name = "Amqp.Net Broker",
     Version = typeof(Program).Assembly.GetName().Version?.ToString() ?? "1.0.0",
     Status = "Running"
 }));
-
 await app.RunAsync().ConfigureAwait(false);

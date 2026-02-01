@@ -35,10 +35,9 @@ public sealed class BindingsController : ControllerBase
     public ActionResult<IEnumerable<BindingDto>> GetAll()
     {
         var bindings = _router.Exchanges
-            .SelectMany(e => e.Bindings)
-            .Select(BindingDto.FromBinding)
-            .ToList();
-
+                              .SelectMany(e => e.Bindings)
+                              .Select(BindingDto.FromBinding)
+                              .ToList();
         return Ok(bindings);
     }
 
@@ -54,33 +53,27 @@ public sealed class BindingsController : ControllerBase
     public ActionResult<BindingDto> Create([FromBody] CreateBindingRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-
         if (string.IsNullOrWhiteSpace(request.Destination))
         {
             return BadRequest("Destination queue name is required");
         }
-
         var exchange = _router.GetExchange(request.Source);
         if (exchange is null)
         {
             return NotFound($"Exchange '{request.Source}' not found");
         }
-
         var queue = _router.GetQueue(request.Destination);
         if (queue is null)
         {
             return NotFound($"Queue '{request.Destination}' not found");
         }
-
         _router.Bind(request.Destination, request.Source, request.RoutingKey);
-
         var dto = new BindingDto
         {
             Source = request.Source,
             Destination = request.Destination,
             RoutingKey = request.RoutingKey
         };
-
         var locationUri = new Uri($"/api/bindings/{Uri.EscapeDataString(request.Source)}/{Uri.EscapeDataString(request.Destination)}", UriKind.Relative);
         return Created(locationUri, dto);
     }
@@ -96,14 +89,11 @@ public sealed class BindingsController : ControllerBase
     public ActionResult Delete([FromBody] DeleteBindingRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-
         if (string.IsNullOrWhiteSpace(request.Destination))
         {
             return BadRequest("Destination queue name is required");
         }
-
         _router.Unbind(request.Destination, request.Source, request.RoutingKey);
-
         return NoContent();
     }
 
@@ -122,13 +112,11 @@ public sealed class BindingsController : ControllerBase
         {
             return NotFound();
         }
-
         var bindings = _router.Exchanges
-            .SelectMany(e => e.Bindings)
-            .Where(b => b.QueueName == queueName)
-            .Select(BindingDto.FromBinding)
-            .ToList();
-
+                              .SelectMany(e => e.Bindings)
+                              .Where(b => b.QueueName == queueName)
+                              .Select(BindingDto.FromBinding)
+                              .ToList();
         return Ok(bindings);
     }
 
@@ -147,11 +135,9 @@ public sealed class BindingsController : ControllerBase
         {
             return NotFound();
         }
-
         var bindings = exchange.Bindings
-            .Select(BindingDto.FromBinding)
-            .ToList();
-
+                               .Select(BindingDto.FromBinding)
+                               .ToList();
         return Ok(bindings);
     }
 }

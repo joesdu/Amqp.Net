@@ -9,6 +9,11 @@ namespace Amqp.Net.Broker.Core.Delivery;
 public interface IDeliveryTracker
 {
     /// <summary>
+    /// Gets the count of unsettled deliveries.
+    /// </summary>
+    int UnsettledCount { get; }
+
+    /// <summary>
     /// Gets the next delivery ID.
     /// </summary>
     /// <returns>A unique delivery ID.</returns>
@@ -50,11 +55,6 @@ public interface IDeliveryTracker
     /// <param name="linkName">The link name.</param>
     /// <returns>List of delivery IDs.</returns>
     IReadOnlyList<uint> GetUnsettledDeliveriesForLink(string linkName);
-
-    /// <summary>
-    /// Gets the count of unsettled deliveries.
-    /// </summary>
-    int UnsettledCount { get; }
 }
 
 /// <summary>

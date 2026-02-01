@@ -36,9 +36,8 @@ public sealed class ExchangesController : ControllerBase
     public ActionResult<IEnumerable<ExchangeDto>> GetAll()
     {
         var exchanges = _router.Exchanges
-            .Select(ExchangeDto.FromExchange)
-            .ToList();
-
+                               .Select(ExchangeDto.FromExchange)
+                               .ToList();
         return Ok(exchanges);
     }
 
@@ -57,7 +56,6 @@ public sealed class ExchangesController : ControllerBase
         {
             return NotFound();
         }
-
         return Ok(ExchangeDto.FromExchange(exchange));
     }
 
@@ -72,20 +70,16 @@ public sealed class ExchangesController : ControllerBase
     public ActionResult<ExchangeDto> Create([FromBody] CreateExchangeRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-
         if (string.IsNullOrWhiteSpace(request.Name))
         {
             return BadRequest("Exchange name is required");
         }
-
-        if (!Enum.TryParse<ExchangeType>(request.Type, ignoreCase: true, out var exchangeType))
+        if (!Enum.TryParse<ExchangeType>(request.Type, true, out var exchangeType))
         {
             return BadRequest($"Invalid exchange type: {request.Type}. Valid types are: direct, topic, fanout, headers");
         }
-
         var exchange = _router.DeclareExchange(request.Name, exchangeType, request.Durable, request.AutoDelete);
         var dto = ExchangeDto.FromExchange(exchange);
-
         return CreatedAtAction(nameof(Get), new { name = exchange.Name }, dto);
     }
 
@@ -110,12 +104,10 @@ public sealed class ExchangesController : ControllerBase
         {
             return BadRequest("Cannot delete default exchanges");
         }
-
         if (!_router.DeleteExchange(name))
         {
             return NotFound();
         }
-
         return NoContent();
     }
 
@@ -134,11 +126,9 @@ public sealed class ExchangesController : ControllerBase
         {
             return NotFound();
         }
-
         var bindings = exchange.Bindings
-            .Select(BindingDto.FromBinding)
-            .ToList();
-
+                               .Select(BindingDto.FromBinding)
+                               .ToList();
         return Ok(bindings);
     }
 }

@@ -30,36 +30,14 @@ public sealed class AmqpServerOptions
     /// </summary>
     public const uint DefaultIdleTimeoutMs = 60000; // 60 seconds
 
-    private List<IPEndPoint> _listenEndpoints = [new IPEndPoint(IPAddress.Any, DefaultPort)];
     private string? _containerId;
+
+    private List<IPEndPoint> _listenEndpoints = [new(IPAddress.Any, DefaultPort)];
 
     /// <summary>
     /// The endpoints to listen on. Defaults to 0.0.0.0:5672.
     /// </summary>
     public IReadOnlyList<IPEndPoint> ListenEndpoints => _listenEndpoints;
-
-    /// <summary>
-    /// Adds an endpoint to listen on.
-    /// </summary>
-    public void AddListenEndpoint(IPEndPoint endpoint)
-    {
-        ArgumentNullException.ThrowIfNull(endpoint);
-        _listenEndpoints.Add(endpoint);
-    }
-
-    /// <summary>
-    /// Sets the listen endpoints, replacing any existing ones.
-    /// </summary>
-    public void SetListenEndpoints(IEnumerable<IPEndPoint> endpoints)
-    {
-        ArgumentNullException.ThrowIfNull(endpoints);
-        _listenEndpoints = [.. endpoints];
-    }
-
-    /// <summary>
-    /// Clears all listen endpoints.
-    /// </summary>
-    public void ClearListenEndpoints() => _listenEndpoints.Clear();
 
     /// <summary>
     /// Maximum number of concurrent connections. Default is 10000.
@@ -100,4 +78,27 @@ public sealed class AmqpServerOptions
         get => _containerId ??= $"amqp-broker-{Guid.NewGuid():N}";
         set => _containerId = value;
     }
+
+    /// <summary>
+    /// Adds an endpoint to listen on.
+    /// </summary>
+    public void AddListenEndpoint(IPEndPoint endpoint)
+    {
+        ArgumentNullException.ThrowIfNull(endpoint);
+        _listenEndpoints.Add(endpoint);
+    }
+
+    /// <summary>
+    /// Sets the listen endpoints, replacing any existing ones.
+    /// </summary>
+    public void SetListenEndpoints(IEnumerable<IPEndPoint> endpoints)
+    {
+        ArgumentNullException.ThrowIfNull(endpoints);
+        _listenEndpoints = [.. endpoints];
+    }
+
+    /// <summary>
+    /// Clears all listen endpoints.
+    /// </summary>
+    public void ClearListenEndpoints() => _listenEndpoints.Clear();
 }

@@ -68,7 +68,7 @@ public sealed record Begin : PerformativeBase
     /// <inheritdoc />
     public override int Encode(Span<byte> buffer)
     {
-        int offset = 0;
+        var offset = 0;
 
         // Described type constructor
         buffer[offset++] = FormatCode.Described;
@@ -77,11 +77,11 @@ public sealed record Begin : PerformativeBase
         offset += AmqpEncoder.EncodeULong(buffer[offset..], DescriptorCode);
 
         // Calculate field count
-        int fieldCount = GetFieldCount();
+        var fieldCount = GetFieldCount();
 
         // Encode fields
         Span<byte> bodyBuffer = stackalloc byte[256];
-        int bodySize = EncodeFields(bodyBuffer, fieldCount);
+        var bodySize = EncodeFields(bodyBuffer, fieldCount);
 
         // List header
         offset += AmqpEncoder.EncodeListHeader(buffer[offset..], bodySize, fieldCount);
@@ -89,19 +89,22 @@ public sealed record Begin : PerformativeBase
         // Copy body
         bodyBuffer[..bodySize].CopyTo(buffer[offset..]);
         offset += bodySize;
-
         return offset;
     }
 
     private int EncodeFields(Span<byte> buffer, int fieldCount)
     {
-        int offset = 0;
+        var offset = 0;
 
         // Field 0: remote-channel
         if (RemoteChannel.HasValue)
+        {
             offset += AmqpEncoder.EncodeUShort(buffer[offset..], RemoteChannel.Value);
+        }
         else
+        {
             offset += AmqpEncoder.EncodeNull(buffer[offset..]);
+        }
 
         // Field 1: next-outgoing-id (mandatory)
         offset += AmqpEncoder.EncodeUInt(buffer[offset..], NextOutgoingId);
@@ -111,86 +114,98 @@ public sealed record Begin : PerformativeBase
 
         // Field 3: outgoing-window (mandatory)
         offset += AmqpEncoder.EncodeUInt(buffer[offset..], OutgoingWindow);
-
-        if (fieldCount <= 4) return offset;
+        if (fieldCount <= 4)
+        {
+            return offset;
+        }
 
         // Field 4: handle-max
         offset += AmqpEncoder.EncodeUInt(buffer[offset..], HandleMax);
-
-        if (fieldCount <= 5) return offset;
+        if (fieldCount <= 5)
+        {
+            return offset;
+        }
 
         // Field 5: offered-capabilities
         offset += AmqpEncoder.EncodeSymbolArray(buffer[offset..], OfferedCapabilities);
-
-        if (fieldCount <= 6) return offset;
+        if (fieldCount <= 6)
+        {
+            return offset;
+        }
 
         // Field 6: desired-capabilities
         offset += AmqpEncoder.EncodeSymbolArray(buffer[offset..], DesiredCapabilities);
-
-        if (fieldCount <= 7) return offset;
+        if (fieldCount <= 7)
+        {
+            return offset;
+        }
 
         // Field 7: properties
         offset += AmqpEncoder.EncodeMap(buffer[offset..], Properties);
-
         return offset;
     }
 
     private int GetFieldCount()
     {
-        if (Properties != null && Properties.Count > 0) return 8;
-        if (DesiredCapabilities != null && DesiredCapabilities.Length > 0) return 7;
-        if (OfferedCapabilities != null && OfferedCapabilities.Length > 0) return 6;
-        if (HandleMax != uint.MaxValue) return 5;
+        if (Properties != null && Properties.Count > 0)
+        {
+            return 8;
+        }
+        if (DesiredCapabilities != null && DesiredCapabilities.Length > 0)
+        {
+            return 7;
+        }
+        if (OfferedCapabilities != null && OfferedCapabilities.Length > 0)
+        {
+            return 6;
+        }
+        if (HandleMax != uint.MaxValue)
+        {
+            return 5;
+        }
         return 4; // mandatory fields
     }
 
     /// <inheritdoc />
-    public override int GetEncodedSize()
-    {
-        return 64; // Estimate
-    }
+    public override int GetEncodedSize() => 64; // Estimate
 
     /// <summary>
     /// Decodes a Begin performative from a buffer.
     /// </summary>
     public static Begin Decode(ReadOnlySpan<byte> buffer, out int listSize, out int bytesConsumed)
     {
-        var (size, count) = AmqpDecoder.DecodeListHeader(buffer, out int headerSize);
+        var (size, count) = AmqpDecoder.DecodeListHeader(buffer, out var headerSize);
         listSize = size;
         bytesConsumed = headerSize + size;
-
         if (count < 4)
         {
             throw new AmqpDecodeException("Begin performative requires at least 4 fields");
         }
-
-        int offset = headerSize;
+        var offset = headerSize;
 
         // Field 0: remote-channel
         ushort? remoteChannel = null;
-        if (!AmqpDecoder.DecodeNull(buffer[offset..], out int consumed))
+        if (!AmqpDecoder.DecodeNull(buffer[offset..], out var consumed))
         {
             remoteChannel = AmqpDecoder.DecodeUShort(buffer[offset..], out consumed);
         }
         offset += consumed;
 
         // Field 1: next-outgoing-id
-        uint nextOutgoingId = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
+        var nextOutgoingId = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
         offset += consumed;
 
         // Field 2: incoming-window
-        uint incomingWindow = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
+        var incomingWindow = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
         offset += consumed;
 
         // Field 3: outgoing-window
-        uint outgoingWindow = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
+        var outgoingWindow = AmqpDecoder.DecodeUInt(buffer[offset..], out consumed);
         offset += consumed;
-
-        uint handleMax = uint.MaxValue;
+        var handleMax = uint.MaxValue;
         string[]? offeredCapabilities = null;
         string[]? desiredCapabilities = null;
         IReadOnlyDictionary<string, object?>? properties = null;
-
         if (count > 4)
         {
             // Field 4: handle-max
@@ -200,29 +215,25 @@ public sealed record Begin : PerformativeBase
             }
             offset += consumed;
         }
-
         if (count > 5)
         {
             // Field 5: offered-capabilities
             offeredCapabilities = AmqpDecoder.DecodeSymbolArray(buffer[offset..], out consumed);
             offset += consumed;
         }
-
         if (count > 6)
         {
             // Field 6: desired-capabilities
             desiredCapabilities = AmqpDecoder.DecodeSymbolArray(buffer[offset..], out consumed);
             offset += consumed;
         }
-
         if (count > 7)
         {
             // Field 7: properties
             properties = AmqpDecoder.DecodeMap(buffer[offset..], out consumed);
             offset += consumed;
         }
-
-        return new Begin
+        return new()
         {
             RemoteChannel = remoteChannel,
             NextOutgoingId = nextOutgoingId,
@@ -236,8 +247,5 @@ public sealed record Begin : PerformativeBase
     }
 
     /// <inheritdoc />
-    public override string ToString()
-    {
-        return $"Begin(RemoteChannel={RemoteChannel}, NextOutgoingId={NextOutgoingId}, IncomingWindow={IncomingWindow}, OutgoingWindow={OutgoingWindow}, HandleMax={HandleMax})";
-    }
+    public override string ToString() => $"Begin(RemoteChannel={RemoteChannel}, NextOutgoingId={NextOutgoingId}, IncomingWindow={IncomingWindow}, OutgoingWindow={OutgoingWindow}, HandleMax={HandleMax})";
 }

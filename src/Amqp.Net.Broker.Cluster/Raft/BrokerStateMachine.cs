@@ -2,12 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Amqp.Net.Broker.Core.Exchanges;
 using Amqp.Net.Broker.Core.Queues;
 using DotNext;
-using DotNext.Buffers;
-using DotNext.IO;
-using DotNext.Net.Cluster.Consensus.Raft;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -24,11 +23,10 @@ public sealed class BrokerStateMachine : ISupplier<BrokerState>, IAsyncDisposabl
     /// </summary>
     public const string LogLocation = "BrokerCluster:DataPath";
 
-    private readonly ILogger<BrokerStateMachine>? _logger;
-    private readonly BrokerState _state = new();
     private readonly DirectoryInfo _location;
+
+    private readonly ILogger<BrokerStateMachine>? _logger;
     private readonly SemaphoreSlim _snapshotLock = new(1, 1);
-    private long _lastAppliedIndex;
 
     /// <summary>
     /// Creates a new broker state machine.
@@ -37,7 +35,6 @@ public sealed class BrokerStateMachine : ISupplier<BrokerState>, IAsyncDisposabl
     {
         _location = location;
         _logger = logger;
-
         if (!_location.Exists)
         {
             _location.Create();
@@ -51,9 +48,7 @@ public sealed class BrokerStateMachine : ISupplier<BrokerState>, IAsyncDisposabl
     /// Creates a new broker state machine from path.
     /// </summary>
     public BrokerStateMachine(string location, ILogger<BrokerStateMachine>? logger = null)
-        : this(new DirectoryInfo(Path.GetFullPath(Path.Combine(location, "state"))), logger)
-    {
-    }
+        : this(new DirectoryInfo(Path.GetFullPath(Path.Combine(location, "state"))), logger) { }
 
     /// <summary>
     /// Creates a new broker state machine from configuration.
@@ -67,15 +62,22 @@ public sealed class BrokerStateMachine : ISupplier<BrokerState>, IAsyncDisposabl
     /// <summary>
     /// Gets the current broker state.
     /// </summary>
-    public BrokerState State => _state;
-
-    /// <inheritdoc />
-    BrokerState ISupplier<BrokerState>.Invoke() => _state;
+    public BrokerState State { get; } = new();
 
     /// <summary>
     /// Gets the last applied log index.
     /// </summary>
-    public long LastAppliedIndex => _lastAppliedIndex;
+    public long LastAppliedIndex { get; private set; }
+
+    /// <inheritdoc />
+    public ValueTask DisposeAsync()
+    {
+        _snapshotLock.Dispose();
+        return ValueTask.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    BrokerState ISupplier<BrokerState>.Invoke() => State;
 
     /// <summary>
     /// Applies a command to the state machine.
@@ -91,7 +93,6 @@ public sealed class BrokerStateMachine : ISupplier<BrokerState>, IAsyncDisposabl
             _logger?.LogWarning("Received empty log entry");
             return index;
         }
-
         try
         {
             var command = ClusterCommand.Deserialize(data.Span);
@@ -103,16 +104,14 @@ public sealed class BrokerStateMachine : ISupplier<BrokerState>, IAsyncDisposabl
             _logger?.LogError(ex, "Failed to apply log entry");
             throw;
         }
-
-        _lastAppliedIndex = index;
+        LastAppliedIndex = index;
 
         // Create snapshot every 100 log entries
-        if (_lastAppliedIndex % 100L == 0)
+        if (LastAppliedIndex % 100L == 0)
         {
-            await CreateSnapshotAsync(_lastAppliedIndex, token).ConfigureAwait(false);
+            await CreateSnapshotAsync(LastAppliedIndex, token).ConfigureAwait(false);
         }
-
-        return _lastAppliedIndex;
+        return LastAppliedIndex;
     }
 
     /// <summary>
@@ -121,7 +120,7 @@ public sealed class BrokerStateMachine : ISupplier<BrokerState>, IAsyncDisposabl
     public async Task<byte[]> GetSnapshotAsync(CancellationToken token)
     {
         using var stream = new MemoryStream();
-        await _state.SerializeAsync(stream, token).ConfigureAwait(false);
+        await State.SerializeAsync(stream, token).ConfigureAwait(false);
         return stream.ToArray();
     }
 
@@ -130,29 +129,23 @@ public sealed class BrokerStateMachine : ISupplier<BrokerState>, IAsyncDisposabl
         switch (command)
         {
             case DeclareExchangeCommand declareExchange:
-                _state.DeclareExchange(declareExchange.Name, declareExchange.ExchangeType, declareExchange.Durable, declareExchange.AutoDelete);
+                State.DeclareExchange(declareExchange.Name, declareExchange.ExchangeType, declareExchange.Durable, declareExchange.AutoDelete);
                 break;
-
             case DeleteExchangeCommand deleteExchange:
-                _state.DeleteExchange(deleteExchange.Name);
+                State.DeleteExchange(deleteExchange.Name);
                 break;
-
             case DeclareQueueCommand declareQueue:
-                _state.DeclareQueue(declareQueue.Name, declareQueue.Options.ToQueueOptions());
+                State.DeclareQueue(declareQueue.Name, declareQueue.Options.ToQueueOptions());
                 break;
-
             case DeleteQueueCommand deleteQueue:
-                _state.DeleteQueue(deleteQueue.Name);
+                State.DeleteQueue(deleteQueue.Name);
                 break;
-
             case BindCommand bind:
-                _state.Bind(bind.QueueName, bind.ExchangeName, bind.RoutingKey);
+                State.Bind(bind.QueueName, bind.ExchangeName, bind.RoutingKey);
                 break;
-
             case UnbindCommand unbind:
-                _state.Unbind(unbind.QueueName, unbind.ExchangeName, unbind.RoutingKey);
+                State.Unbind(unbind.QueueName, unbind.ExchangeName, unbind.RoutingKey);
                 break;
-
             default:
                 throw new InvalidOperationException($"Unknown command type: {command.GetType().Name}");
         }
@@ -161,30 +154,28 @@ public sealed class BrokerStateMachine : ISupplier<BrokerState>, IAsyncDisposabl
     private void RestoreFromSnapshot()
     {
         var latestSnapshot = _location.EnumerateFiles("snapshot_*.json")
-            .Select(f =>
-            {
-                var fileName = Path.GetFileNameWithoutExtension(f.Name);
-                if (fileName.StartsWith("snapshot_", StringComparison.Ordinal) &&
-                    long.TryParse(fileName.AsSpan(9), out var index))
-                {
-                    return (File: f, Index: index);
-                }
-                return (File: f, Index: -1L);
-            })
-            .Where(x => x.Index >= 0)
-            .OrderByDescending(x => x.Index)
-            .FirstOrDefault();
-
+                                      .Select(f =>
+                                      {
+                                          var fileName = Path.GetFileNameWithoutExtension(f.Name);
+                                          if (fileName.StartsWith("snapshot_", StringComparison.Ordinal) &&
+                                              long.TryParse(fileName.AsSpan(9), out var index))
+                                          {
+                                              return (File: f, Index: index);
+                                          }
+                                          return (File: f, Index: -1L);
+                                      })
+                                      .Where(x => x.Index >= 0)
+                                      .OrderByDescending(x => x.Index)
+                                      .FirstOrDefault();
         if (latestSnapshot.File is not null)
         {
             try
             {
                 using var stream = latestSnapshot.File.OpenRead();
-                _state.DeserializeAsync(stream, CancellationToken.None).GetAwaiter().GetResult();
-                _lastAppliedIndex = latestSnapshot.Index;
-
+                State.DeserializeAsync(stream, CancellationToken.None).GetAwaiter().GetResult();
+                LastAppliedIndex = latestSnapshot.Index;
                 _logger?.LogInformation("Restored state from snapshot at index {Index}: {ExchangeCount} exchanges, {QueueCount} queues",
-                    latestSnapshot.Index, _state.Exchanges.Count, _state.Queues.Count);
+                    latestSnapshot.Index, State.Exchanges.Count, State.Queues.Count);
             }
             catch (Exception ex)
             {
@@ -199,32 +190,29 @@ public sealed class BrokerStateMachine : ISupplier<BrokerState>, IAsyncDisposabl
         try
         {
             var snapshotFile = new FileInfo(Path.Combine(_location.FullName, $"snapshot_{index}.json"));
-
             await using (var stream = snapshotFile.Create())
             {
-                await _state.SerializeAsync(stream, token).ConfigureAwait(false);
+                await State.SerializeAsync(stream, token).ConfigureAwait(false);
             }
-
             _logger?.LogInformation("Created snapshot at index {Index}: {ExchangeCount} exchanges, {QueueCount} queues",
-                index, _state.Exchanges.Count, _state.Queues.Count);
+                index, State.Exchanges.Count, State.Queues.Count);
 
             // Clean up old snapshots (keep last 3)
             var oldSnapshots = _location.EnumerateFiles("snapshot_*.json")
-                .Select(f =>
-                {
-                    var fileName = Path.GetFileNameWithoutExtension(f.Name);
-                    if (fileName.StartsWith("snapshot_", StringComparison.Ordinal) &&
-                        long.TryParse(fileName.AsSpan(9), out var idx))
-                    {
-                        return (File: f, Index: idx);
-                    }
-                    return (File: f, Index: -1L);
-                })
-                .Where(x => x.Index >= 0)
-                .OrderByDescending(x => x.Index)
-                .Skip(3)
-                .ToList();
-
+                                        .Select(f =>
+                                        {
+                                            var fileName = Path.GetFileNameWithoutExtension(f.Name);
+                                            if (fileName.StartsWith("snapshot_", StringComparison.Ordinal) &&
+                                                long.TryParse(fileName.AsSpan(9), out var idx))
+                                            {
+                                                return (File: f, Index: idx);
+                                            }
+                                            return (File: f, Index: -1L);
+                                        })
+                                        .Where(x => x.Index >= 0)
+                                        .OrderByDescending(x => x.Index)
+                                        .Skip(3)
+                                        .ToList();
             foreach (var (file, _) in oldSnapshots)
             {
                 try
@@ -243,13 +231,6 @@ public sealed class BrokerStateMachine : ISupplier<BrokerState>, IAsyncDisposabl
             _snapshotLock.Release();
         }
     }
-
-    /// <inheritdoc />
-    public ValueTask DisposeAsync()
-    {
-        _snapshotLock.Dispose();
-        return ValueTask.CompletedTask;
-    }
 }
 
 /// <summary>
@@ -257,9 +238,9 @@ public sealed class BrokerStateMachine : ISupplier<BrokerState>, IAsyncDisposabl
 /// </summary>
 public sealed class BrokerState
 {
+    private readonly ConcurrentDictionary<string, List<BindingMetadata>> _bindings = new();
     private readonly ConcurrentDictionary<string, ExchangeMetadata> _exchanges = new();
     private readonly ConcurrentDictionary<string, QueueMetadata> _queues = new();
-    private readonly ConcurrentDictionary<string, List<BindingMetadata>> _bindings = new();
 
     /// <summary>
     /// Gets all exchanges.
@@ -281,7 +262,7 @@ public sealed class BrokerState
     /// </summary>
     public void DeclareExchange(string name, ExchangeType type, bool durable, bool autoDelete)
     {
-        _exchanges.TryAdd(name, new ExchangeMetadata
+        _exchanges.TryAdd(name, new()
         {
             Name = name,
             Type = type,
@@ -308,7 +289,7 @@ public sealed class BrokerState
     /// </summary>
     public void DeclareQueue(string name, QueueOptions options)
     {
-        _queues.TryAdd(name, new QueueMetadata
+        _queues.TryAdd(name, new()
         {
             Name = name,
             Options = options
@@ -344,7 +325,6 @@ public sealed class BrokerState
             ExchangeName = exchangeName,
             RoutingKey = routingKey
         };
-
         lock (bindings)
         {
             if (!bindings.Any(b => b.QueueName == queueName && b.RoutingKey == routingKey))
@@ -379,8 +359,7 @@ public sealed class BrokerState
             Queues = _queues.Values.ToList(),
             Bindings = _bindings.SelectMany(kvp => kvp.Value).ToList()
         };
-
-        await System.Text.Json.JsonSerializer.SerializeAsync(stream, snapshot, BrokerStateSnapshotContext.Default.BrokerStateSnapshot, token).ConfigureAwait(false);
+        await JsonSerializer.SerializeAsync(stream, snapshot, BrokerStateSnapshotContext.Default.BrokerStateSnapshot, token).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -388,27 +367,22 @@ public sealed class BrokerState
     /// </summary>
     public async Task DeserializeAsync(Stream stream, CancellationToken token)
     {
-        var snapshot = await System.Text.Json.JsonSerializer.DeserializeAsync(stream, BrokerStateSnapshotContext.Default.BrokerStateSnapshot, token).ConfigureAwait(false);
-
+        var snapshot = await JsonSerializer.DeserializeAsync(stream, BrokerStateSnapshotContext.Default.BrokerStateSnapshot, token).ConfigureAwait(false);
         if (snapshot is null)
         {
             return;
         }
-
         _exchanges.Clear();
         _queues.Clear();
         _bindings.Clear();
-
         foreach (var exchange in snapshot.Exchanges)
         {
             _exchanges.TryAdd(exchange.Name, exchange);
         }
-
         foreach (var queue in snapshot.Queues)
         {
             _queues.TryAdd(queue.Name, queue);
         }
-
         foreach (var binding in snapshot.Bindings)
         {
             var bindings = _bindings.GetOrAdd(binding.ExchangeName, _ => []);
@@ -486,18 +460,18 @@ public sealed record BindingMetadata
 internal sealed record BrokerStateSnapshot
 {
     public List<ExchangeMetadata> Exchanges { get; init; } = [];
+
     public List<QueueMetadata> Queues { get; init; } = [];
+
     public List<BindingMetadata> Bindings { get; init; } = [];
 }
 
 /// <summary>
 /// JSON serialization context for broker state snapshot.
 /// </summary>
-[System.Text.Json.Serialization.JsonSerializable(typeof(BrokerStateSnapshot))]
-[System.Text.Json.Serialization.JsonSerializable(typeof(ExchangeMetadata))]
-[System.Text.Json.Serialization.JsonSerializable(typeof(QueueMetadata))]
-[System.Text.Json.Serialization.JsonSerializable(typeof(BindingMetadata))]
-[System.Text.Json.Serialization.JsonSerializable(typeof(QueueOptions))]
-internal sealed partial class BrokerStateSnapshotContext : System.Text.Json.Serialization.JsonSerializerContext
-{
-}
+[JsonSerializable(typeof(BrokerStateSnapshot))]
+[JsonSerializable(typeof(ExchangeMetadata))]
+[JsonSerializable(typeof(QueueMetadata))]
+[JsonSerializable(typeof(BindingMetadata))]
+[JsonSerializable(typeof(QueueOptions))]
+internal sealed partial class BrokerStateSnapshotContext : JsonSerializerContext { }

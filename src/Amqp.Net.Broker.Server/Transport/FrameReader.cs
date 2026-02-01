@@ -14,8 +14,8 @@ namespace Amqp.Net.Broker.Server.Transport;
 /// </summary>
 internal sealed class FrameReader
 {
-    private readonly PipeReader _reader;
     private readonly uint _maxFrameSize;
+    private readonly PipeReader _reader;
 
     /// <summary>
     /// Creates a new frame reader.
@@ -37,7 +37,6 @@ internal sealed class FrameReader
         {
             var result = await _reader.ReadAsync(cancellationToken).ConfigureAwait(false);
             var buffer = result.Buffer;
-
             try
             {
                 if (TryReadFrame(ref buffer, out var frame))
@@ -45,7 +44,6 @@ internal sealed class FrameReader
                     _reader.AdvanceTo(buffer.Start);
                     return frame;
                 }
-
                 if (result.IsCompleted)
                 {
                     if (buffer.Length > 0)
@@ -82,7 +80,6 @@ internal sealed class FrameReader
         {
             throw new AmqpConnectionException($"Frame size {header.FrameSize} exceeds maximum {_maxFrameSize}");
         }
-
         if (!header.IsValid)
         {
             throw new AmqpConnectionException($"Invalid frame header: {header}");
@@ -96,10 +93,8 @@ internal sealed class FrameReader
 
         // Extract frame body
         var frameSlice = buffer.Slice(0, header.FrameSize);
-        
         IPerformative? performative = null;
-        ReadOnlyMemory<byte> payload = ReadOnlyMemory<byte>.Empty;
-
+        var payload = ReadOnlyMemory<byte>.Empty;
         if (header.BodySize > 0)
         {
             // Read body
@@ -107,15 +102,14 @@ internal sealed class FrameReader
             var bodyArray = bodySlice.ToArray();
 
             // Decode performative
-            performative = PerformativeDecoder.Decode(bodyArray, out int consumed);
+            performative = PerformativeDecoder.Decode(bodyArray, out var consumed);
 
             // Any remaining bytes are payload (for Transfer frames)
             if (consumed < bodyArray.Length)
             {
-                payload = new ReadOnlyMemory<byte>(bodyArray, consumed, bodyArray.Length - consumed);
+                payload = new(bodyArray, consumed, bodyArray.Length - consumed);
             }
         }
-
         frame = new AmqpFrame(header, performative, payload);
         buffer = buffer.Slice(header.FrameSize);
         return true;

@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Reflection;
 using Amqp.Net.Broker.Core.Exchanges;
 using Amqp.Net.Broker.Core.Routing;
@@ -20,10 +19,10 @@ namespace Amqp.Net.Broker.Management.Controllers;
 public sealed class OverviewController : ControllerBase
 {
     private static readonly DateTimeOffset StartTime = DateTimeOffset.UtcNow;
+
     private static readonly string Version = Assembly.GetExecutingAssembly()
-        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-        ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
-        ?? "1.0.0";
+                                                     .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ??
+                                             Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
 
     private readonly IMessageRouter _router;
 
@@ -45,19 +44,18 @@ public sealed class OverviewController : ControllerBase
     {
         var queues = _router.Queues;
         var exchanges = _router.Exchanges;
-
         var overview = new OverviewDto
         {
             Version = Version,
             NodeName = Environment.MachineName,
             UptimeMs = (long)(DateTimeOffset.UtcNow - StartTime).TotalMilliseconds,
-            Queues = new QueueStatistics
+            Queues = new()
             {
                 Total = queues.Count,
                 Durable = queues.Count(q => q.Options.Durable),
                 Transient = queues.Count(q => !q.Options.Durable)
             },
-            Exchanges = new ExchangeStatistics
+            Exchanges = new()
             {
                 Total = exchanges.Count,
                 Direct = exchanges.Count(e => e.Type == ExchangeType.Direct),
@@ -65,14 +63,13 @@ public sealed class OverviewController : ControllerBase
                 Fanout = exchanges.Count(e => e.Type == ExchangeType.Fanout),
                 Headers = exchanges.Count(e => e.Type == ExchangeType.Headers)
             },
-            Messages = new MessageStatistics
+            Messages = new()
             {
                 Total = queues.Sum(q => (long)q.MessageCount),
                 TotalSizeBytes = queues.Sum(q => q.TotalSizeBytes),
                 TotalConsumers = queues.Sum(q => q.ConsumerCount)
             }
         };
-
         return Ok(overview);
     }
 
@@ -82,15 +79,13 @@ public sealed class OverviewController : ControllerBase
     /// <returns>Health status.</returns>
     [HttpGet("health")]
     [ProducesResponseType(typeof(HealthResponse), StatusCodes.Status200OK)]
-    public ActionResult<HealthResponse> Health()
-    {
-        return Ok(new HealthResponse
+    public ActionResult<HealthResponse> Health() =>
+        Ok(new HealthResponse
         {
             Status = "ok",
             Version = Version,
             UptimeMs = (long)(DateTimeOffset.UtcNow - StartTime).TotalMilliseconds
         });
-    }
 }
 
 /// <summary>

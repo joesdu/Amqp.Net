@@ -2,8 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Globalization;
 using Amqp.Net.Broker.Core.Messages;
-using Amqp.Net.Broker.Core.Queues;
 using Amqp.Net.Broker.Core.Routing;
 using Amqp.Net.Broker.Server.Links;
 using Amqp.Net.Protocol.Messaging;
@@ -15,32 +15,64 @@ namespace Amqp.Net.Broker.Server.Handlers;
 /// <summary>
 /// Handles the integration between AMQP links and the broker's message routing system.
 /// </summary>
-public sealed class BrokerLinkHandler : IBrokerLinkHandler
+/// <remarks>
+/// Creates a new broker link handler.
+/// </remarks>
+public sealed class BrokerLinkHandler(IMessageRouter router, ILogger<BrokerLinkHandler> logger) : IBrokerLinkHandler
 {
-    private readonly IMessageRouter _router;
-    private readonly ILogger<BrokerLinkHandler> _logger;
+    private static readonly Action<ILogger, string?, string?, Exception?> s_receiverLinkAttached =
+        LoggerMessage.Define<string?, string?>(LogLevel.Debug,
+            new(1, nameof(s_receiverLinkAttached)),
+            "Receiver link {LinkName} attached, ready to receive messages to {Target}");
+
+    private static readonly Action<ILogger, string?, int, string, string, Exception?> s_routedMessage =
+        LoggerMessage.Define<string?, int, string, string>(LogLevel.Debug,
+            new(2, nameof(s_routedMessage)),
+            "Routed message from link {LinkName} to {Count} queue(s) via exchange '{Exchange}' with key '{RoutingKey}'");
+
+    private static readonly Action<ILogger, string?, Exception?> s_failedToProcessMessage =
+        LoggerMessage.Define<string?>(LogLevel.Error,
+            new(3, nameof(s_failedToProcessMessage)),
+            "Failed to process message on link {LinkName}");
+
+    private static readonly Action<ILogger, string?, string?, Exception?> s_startedConsumer =
+        LoggerMessage.Define<string?, string?>(LogLevel.Debug,
+            new(4, nameof(s_startedConsumer)),
+            "Started consumer for link {LinkName} from queue {QueueName}");
+
+    private static readonly Action<ILogger, string?, Exception?> s_stoppedConsumer =
+        LoggerMessage.Define<string?>(LogLevel.Debug,
+            new(5, nameof(s_stoppedConsumer)),
+            "Stopped consumer for link {LinkName}");
+
+    private static readonly Action<ILogger, string?, string?, Exception?> s_queueNotFound =
+        LoggerMessage.Define<string?, string?>(LogLevel.Warning,
+            new(6, nameof(s_queueNotFound)),
+            "Queue {QueueName} not found for consumer on link {LinkName}");
+
+    private static readonly Action<ILogger, long, string?, Exception?> s_sentMessage =
+        LoggerMessage.Define<long, string?>(LogLevel.Debug,
+            new(7, nameof(s_sentMessage)),
+            "Sent message {MessageId} to link {LinkName}");
+
+    private static readonly Action<ILogger, string?, Exception?> s_consumerLoopFailed =
+        LoggerMessage.Define<string?>(LogLevel.Error,
+            new(8, nameof(s_consumerLoopFailed)),
+            "Consumer loop failed for link {LinkName}");
+
     private readonly ConcurrentDictionary<string, ConsumerState> _consumers = new();
     private long _nextDeliveryId;
-
-    /// <summary>
-    /// Creates a new broker link handler.
-    /// </summary>
-    public BrokerLinkHandler(IMessageRouter router, ILogger<BrokerLinkHandler> logger)
-    {
-        _router = router;
-        _logger = logger;
-    }
 
     /// <inheritdoc />
     public void OnLinkAttached(AmqpLink link)
     {
+        ArgumentNullException.ThrowIfNull(link);
         if (link.IsReceiver)
         {
             // We are receiver = client is sender = client publishes messages
             // Set up handler to route incoming messages
             link.OnMessageReceived = HandleIncomingMessageAsync;
-            _logger.LogDebug("Receiver link {LinkName} attached, ready to receive messages to {Target}",
-                link.Name, link.TargetAddress);
+            s_receiverLinkAttached(logger, link.Name, link.TargetAddress, null);
         }
         else
         {
@@ -57,6 +89,7 @@ public sealed class BrokerLinkHandler : IBrokerLinkHandler
     /// <inheritdoc />
     public void OnLinkDetached(AmqpLink link)
     {
+        ArgumentNullException.ThrowIfNull(link);
         if (link.IsSender)
         {
             StopConsumer(link);
@@ -72,11 +105,11 @@ public sealed class BrokerLinkHandler : IBrokerLinkHandler
         {
             // Parse the AMQP message from payload
             var message = AmqpMessage.Decode(delivery.Payload.Span);
-            
+
             // Determine routing key and exchange
             var targetAddress = link.TargetAddress ?? "";
             var (exchangeName, routingKey) = ParseAddress(targetAddress);
-            
+
             // Extract message properties
             var properties = new MessageProperties
             {
@@ -85,46 +118,44 @@ public sealed class BrokerLinkHandler : IBrokerLinkHandler
                 ContentType = message.Properties?.ContentType,
                 ReplyTo = message.Properties?.ReplyTo
             };
-            
+
             // Get message body
             var body = message.GetBodyAsBinary() ?? ReadOnlyMemory<byte>.Empty;
-            
+
             // Route the message
-            var routedCount = await _router.RouteAsync(
-                exchangeName,
-                routingKey,
-                body,
-                properties,
-                cancellationToken).ConfigureAwait(false);
-            
-            _logger.LogDebug("Routed message from link {LinkName} to {Count} queue(s) via exchange '{Exchange}' with key '{RoutingKey}'",
-                link.Name, routedCount, exchangeName, routingKey);
-            
+            var routedCount = await router.RouteAsync(exchangeName,
+                                  routingKey,
+                                  body,
+                                  properties,
+                                  cancellationToken).ConfigureAwait(false);
+            s_routedMessage(logger, link.Name, routedCount, exchangeName, routingKey, null);
+
             // Settle the delivery if not pre-settled
             if (!delivery.Settled)
             {
                 await link.SettleAsync(delivery.DeliveryId, Accepted.Instance, cancellationToken)
-                    .ConfigureAwait(false);
+                          .ConfigureAwait(false);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to process message on link {LinkName}", link.Name);
-            
+            s_failedToProcessMessage(logger, link.Name, ex);
+
             // Reject the delivery
             if (!delivery.Settled)
             {
                 var rejected = new Rejected
                 {
-                    Error = new AmqpError
+                    Error = new()
                     {
                         Condition = "amqp:internal-error",
                         Description = ex.Message
                     }
                 };
                 await link.SettleAsync(delivery.DeliveryId, rejected, cancellationToken)
-                    .ConfigureAwait(false);
+                          .ConfigureAwait(false);
             }
+            throw;
         }
     }
 
@@ -133,15 +164,22 @@ public sealed class BrokerLinkHandler : IBrokerLinkHandler
     /// </summary>
     private void StartConsumer(AmqpLink link, string queueName)
     {
-        var cts = new CancellationTokenSource();
-        var state = new ConsumerState(link, queueName, cts);
-        
-        if (_consumers.TryAdd(link.Name, state))
+        CancellationTokenSource? cts = null;
+        try
         {
-            // Start the consumer loop
-            _ = ConsumeLoopAsync(state);
-            _logger.LogDebug("Started consumer for link {LinkName} from queue {QueueName}",
-                link.Name, queueName);
+            cts = new();
+            var state = new ConsumerState(link, queueName, cts);
+            if (_consumers.TryAdd(link.Name, state))
+            {
+                // Start the consumer loop
+                _ = ConsumeLoopAsync(state);
+                s_startedConsumer(logger, link.Name, queueName, null);
+                cts = null;
+            }
+        }
+        finally
+        {
+            cts?.Dispose();
         }
     }
 
@@ -154,7 +192,7 @@ public sealed class BrokerLinkHandler : IBrokerLinkHandler
         {
             state.CancellationTokenSource.Cancel();
             state.CancellationTokenSource.Dispose();
-            _logger.LogDebug("Stopped consumer for link {LinkName}", link.Name);
+            s_stoppedConsumer(logger, link.Name, null);
         }
     }
 
@@ -166,19 +204,15 @@ public sealed class BrokerLinkHandler : IBrokerLinkHandler
         var link = state.Link;
         var queueName = state.QueueName;
         var cancellationToken = state.CancellationTokenSource.Token;
-        
         try
         {
-            var queue = _router.GetQueue(queueName);
+            var queue = router.GetQueue(queueName);
             if (queue == null)
             {
-                _logger.LogWarning("Queue {QueueName} not found for consumer on link {LinkName}",
-                    queueName, link.Name);
+                s_queueNotFound(logger, queueName, link.Name, null);
                 return;
             }
-            
             queue.AddConsumer();
-            
             try
             {
                 while (!cancellationToken.IsCancellationRequested && link.State == LinkState.Attached)
@@ -189,11 +223,10 @@ public sealed class BrokerLinkHandler : IBrokerLinkHandler
                         await Task.Delay(10, cancellationToken).ConfigureAwait(false);
                         continue;
                     }
-                    
+
                     // Dequeue a message with timeout
                     using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     timeoutCts.CancelAfter(TimeSpan.FromMilliseconds(100));
-                    
                     StoredMessage? storedMessage;
                     try
                     {
@@ -204,18 +237,17 @@ public sealed class BrokerLinkHandler : IBrokerLinkHandler
                         // Timeout, continue loop
                         continue;
                     }
-                    
                     if (storedMessage == null)
                     {
                         continue;
                     }
-                    
+
                     // Build AMQP message
                     var amqpMessage = new AmqpMessage
                     {
-                        Properties = new Properties
+                        Properties = new()
                         {
-                            MessageId = storedMessage.MessageId.ToString(),
+                            MessageId = storedMessage.MessageId.ToString(CultureInfo.InvariantCulture),
                             CorrelationId = storedMessage.CorrelationId,
                             ContentType = storedMessage.ContentType,
                             ReplyTo = storedMessage.ReplyTo,
@@ -223,25 +255,21 @@ public sealed class BrokerLinkHandler : IBrokerLinkHandler
                         },
                         Body = [new DataSection { Binary = storedMessage.Body }]
                     };
-                    
+
                     // Encode message
                     var buffer = new byte[amqpMessage.GetEncodedSize()];
                     var encodedSize = amqpMessage.Encode(buffer);
-                    
                     var deliveryId = (uint)Interlocked.Increment(ref _nextDeliveryId);
                     var deliveryTag = BitConverter.GetBytes(deliveryId);
-                    
+
                     // Send via the link's session
-                    await link.Session.SendTransferAsync(
-                        link.LocalHandle,
+                    await link.Session.SendTransferAsync(link.LocalHandle,
                         deliveryId,
                         deliveryTag,
                         buffer.AsMemory(0, encodedSize),
                         storedMessage.MessageId,
                         cancellationToken).ConfigureAwait(false);
-                    
-                    _logger.LogDebug("Sent message {MessageId} to link {LinkName}",
-                        storedMessage.MessageId, link.Name);
+                    s_sentMessage(logger, storedMessage.MessageId, link.Name, null);
                 }
             }
             finally
@@ -255,7 +283,8 @@ public sealed class BrokerLinkHandler : IBrokerLinkHandler
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Consumer loop failed for link {LinkName}", link.Name);
+            s_consumerLoopFailed(logger, link.Name, ex);
+            throw;
         }
     }
 
@@ -266,14 +295,15 @@ public sealed class BrokerLinkHandler : IBrokerLinkHandler
     private static (string ExchangeName, string RoutingKey) ParseAddress(string address)
     {
         if (string.IsNullOrEmpty(address))
+        {
             return ("", "");
-        
-        var slashIndex = address.IndexOf('/');
+        }
+        var slashIndex = address.IndexOf('/', StringComparison.Ordinal);
         if (slashIndex > 0)
         {
             return (address[..slashIndex], address[(slashIndex + 1)..]);
         }
-        
+
         // No slash - treat as queue name with default exchange
         return ("", address);
     }
@@ -290,7 +320,7 @@ public interface IBrokerLinkHandler
     /// Called when a link is attached.
     /// </summary>
     void OnLinkAttached(AmqpLink link);
-    
+
     /// <summary>
     /// Called when a link is detached.
     /// </summary>

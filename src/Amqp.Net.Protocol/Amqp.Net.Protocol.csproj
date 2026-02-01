@@ -5,8 +5,4 @@
     <PackageTags>amqp;protocol;messaging;encoding</PackageTags>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="System.IO.Pipelines" />
-  </ItemGroup>
-
 </Project>

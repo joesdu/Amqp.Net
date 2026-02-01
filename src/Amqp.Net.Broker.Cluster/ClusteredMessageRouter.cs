@@ -3,7 +3,6 @@
 
 using Amqp.Net.Broker.Cluster.Raft;
 using Amqp.Net.Broker.Core.Exchanges;
-using Amqp.Net.Broker.Core.Messages;
 using Amqp.Net.Broker.Core.Queues;
 using Amqp.Net.Broker.Core.Routing;
 using DotNext.IO;
@@ -20,8 +19,8 @@ public sealed class ClusteredMessageRouter : IMessageRouter
 {
     private readonly IRaftCluster _cluster;
     private readonly IMessageRouter _localRouter;
-    private readonly BrokerStateMachine _stateMachine;
     private readonly ILogger<ClusteredMessageRouter> _logger;
+    private readonly BrokerStateMachine _stateMachine;
 
     /// <summary>
     /// Creates a new clustered message router.
@@ -50,12 +49,10 @@ public sealed class ClusteredMessageRouter : IMessageRouter
         string routingKey,
         ReadOnlyMemory<byte> body,
         MessageProperties? properties = null,
-        CancellationToken cancellationToken = default)
-    {
+        CancellationToken cancellationToken = default) =>
         // Message routing is local - messages are not replicated through Raft
         // Only topology (exchanges, queues, bindings) is replicated
-        return _localRouter.RouteAsync(exchangeName, routingKey, body, properties, cancellationToken);
-    }
+        _localRouter.RouteAsync(exchangeName, routingKey, body, properties, cancellationToken);
 
     /// <inheritdoc />
     public IExchange DeclareExchange(string name, ExchangeType type, bool durable = false, bool autoDelete = false)
@@ -68,9 +65,7 @@ public sealed class ClusteredMessageRouter : IMessageRouter
             Durable = durable,
             AutoDelete = autoDelete
         };
-
         ReplicateCommand(command);
-
         return _localRouter.DeclareExchange(name, type, durable, autoDelete);
     }
 
@@ -79,7 +74,6 @@ public sealed class ClusteredMessageRouter : IMessageRouter
     {
         var command = new DeleteExchangeCommand { Name = name };
         ReplicateCommand(command);
-
         return _localRouter.DeleteExchange(name);
     }
 
@@ -91,9 +85,7 @@ public sealed class ClusteredMessageRouter : IMessageRouter
             Name = name,
             Options = QueueOptionsDto.FromQueueOptions(options ?? QueueOptions.Default)
         };
-
         ReplicateCommand(command);
-
         return _localRouter.DeclareQueue(name, options);
     }
 
@@ -102,7 +94,6 @@ public sealed class ClusteredMessageRouter : IMessageRouter
     {
         var command = new DeleteQueueCommand { Name = name };
         ReplicateCommand(command);
-
         return _localRouter.DeleteQueue(name);
     }
 
@@ -115,9 +106,7 @@ public sealed class ClusteredMessageRouter : IMessageRouter
             ExchangeName = exchangeName,
             RoutingKey = routingKey
         };
-
         ReplicateCommand(command);
-
         _localRouter.Bind(queueName, exchangeName, routingKey);
     }
 
@@ -130,9 +119,7 @@ public sealed class ClusteredMessageRouter : IMessageRouter
             ExchangeName = exchangeName,
             RoutingKey = routingKey
         };
-
         ReplicateCommand(command);
-
         _localRouter.Unbind(queueName, exchangeName, routingKey);
     }
 
@@ -155,7 +142,6 @@ public sealed class ClusteredMessageRouter : IMessageRouter
         // We are the leader, replicate the command
         var data = command.Serialize();
         var entry = new BinaryLogEntry(data, _cluster.Term);
-
         try
         {
             // Fire and forget - the command will be applied when committed
@@ -196,6 +182,5 @@ internal readonly struct BinaryLogEntry : IRaftLogEntry
 
     long? IDataTransferObject.Length => _data.Length;
 
-    public ValueTask WriteToAsync<TWriter>(TWriter writer, CancellationToken token) where TWriter : IAsyncBinaryWriter
-        => writer.Invoke(new ReadOnlyMemory<byte>(_data), token);
+    public ValueTask WriteToAsync<TWriter>(TWriter writer, CancellationToken token) where TWriter : IAsyncBinaryWriter => writer.Invoke(new(_data), token);
 }

@@ -35,9 +35,8 @@ public sealed class QueuesController : ControllerBase
     public ActionResult<IEnumerable<QueueDto>> GetAll()
     {
         var queues = _router.Queues
-            .Select(QueueDto.FromQueue)
-            .ToList();
-
+                            .Select(QueueDto.FromQueue)
+                            .ToList();
         return Ok(queues);
     }
 
@@ -56,7 +55,6 @@ public sealed class QueuesController : ControllerBase
         {
             return NotFound();
         }
-
         return Ok(QueueDto.FromQueue(queue));
     }
 
@@ -71,16 +69,13 @@ public sealed class QueuesController : ControllerBase
     public ActionResult<QueueDto> Create([FromBody] CreateQueueRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-
         if (string.IsNullOrWhiteSpace(request.Name))
         {
             return BadRequest("Queue name is required");
         }
-
         var options = request.ToQueueOptions();
         var queue = _router.DeclareQueue(request.Name, options);
         var dto = QueueDto.FromQueue(queue);
-
         return CreatedAtAction(nameof(Get), new { name = queue.Name }, dto);
     }
 
@@ -99,12 +94,10 @@ public sealed class QueuesController : ControllerBase
         {
             return BadRequest("Queue name is required");
         }
-
         if (!_router.DeleteQueue(name))
         {
             return NotFound();
         }
-
         return NoContent();
     }
 
@@ -123,9 +116,7 @@ public sealed class QueuesController : ControllerBase
         {
             return NotFound();
         }
-
         var purged = await queue.PurgeAsync().ConfigureAwait(false);
-
         return Ok(new PurgeQueueResponse { MessagesPurged = purged });
     }
 }

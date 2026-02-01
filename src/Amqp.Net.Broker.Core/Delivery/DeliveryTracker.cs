@@ -17,10 +17,7 @@ public sealed class DeliveryTracker : IDeliveryTracker
     public int UnsettledCount => _deliveries.Count;
 
     /// <inheritdoc />
-    public uint NextDeliveryId()
-    {
-        return Interlocked.Increment(ref _nextDeliveryId);
-    }
+    public uint NextDeliveryId() => Interlocked.Increment(ref _nextDeliveryId);
 
     /// <inheritdoc />
     public void Track(uint deliveryId, long messageId, string queueName, string linkName)
@@ -33,7 +30,6 @@ public sealed class DeliveryTracker : IDeliveryTracker
             LinkName = linkName,
             CreatedAt = DateTimeOffset.UtcNow
         };
-
         _deliveries.TryAdd(deliveryId, info);
     }
 
@@ -45,28 +41,25 @@ public sealed class DeliveryTracker : IDeliveryTracker
     }
 
     /// <inheritdoc />
-    public bool Settle(uint deliveryId)
-    {
-        return _deliveries.TryRemove(deliveryId, out _);
-    }
+    public bool Settle(uint deliveryId) => _deliveries.TryRemove(deliveryId, out _);
 
     /// <inheritdoc />
     public IReadOnlyList<uint> GetUnsettledDeliveries(TimeSpan olderThan)
     {
         var threshold = DateTimeOffset.UtcNow - olderThan;
         return _deliveries
-            .Where(kvp => kvp.Value.CreatedAt < threshold)
-            .Select(kvp => kvp.Key)
-            .ToList();
+               .Where(kvp => kvp.Value.CreatedAt < threshold)
+               .Select(kvp => kvp.Key)
+               .ToList();
     }
 
     /// <inheritdoc />
     public IReadOnlyList<uint> GetUnsettledDeliveriesForLink(string linkName)
     {
         return _deliveries
-            .Where(kvp => kvp.Value.LinkName == linkName)
-            .Select(kvp => kvp.Key)
-            .ToList();
+               .Where(kvp => kvp.Value.LinkName == linkName)
+               .Select(kvp => kvp.Key)
+               .ToList();
     }
 
     /// <summary>
@@ -77,8 +70,7 @@ public sealed class DeliveryTracker : IDeliveryTracker
     public int SettleAllForLink(string linkName)
     {
         var deliveryIds = GetUnsettledDeliveriesForLink(linkName);
-        int count = 0;
-
+        var count = 0;
         foreach (var id in deliveryIds)
         {
             if (_deliveries.TryRemove(id, out _))
@@ -86,7 +78,6 @@ public sealed class DeliveryTracker : IDeliveryTracker
                 count++;
             }
         }
-
         return count;
     }
 

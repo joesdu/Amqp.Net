@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Amqp.Net.Broker.Server.Transport;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Amqp.Net.Broker.Host;
@@ -16,8 +14,8 @@ internal sealed class BrokerHostedService : IHostedService
 #pragma warning restore CA1812
 {
     private readonly AmqpListener _listener;
-    private readonly BrokerOptions _options;
     private readonly ILogger<BrokerHostedService> _logger;
+    private readonly BrokerOptions _options;
 
     /// <summary>
     /// Creates a new broker hosted service.
@@ -30,7 +28,6 @@ internal sealed class BrokerHostedService : IHostedService
         ArgumentNullException.ThrowIfNull(listener);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
-
         _listener = listener;
         _options = options.Value;
         _logger = logger;
@@ -40,7 +37,6 @@ internal sealed class BrokerHostedService : IHostedService
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         Log.BrokerStarting(_logger, _options.Name, _options.Host, _options.Port);
-
         try
         {
             await _listener.StartAsync(cancellationToken).ConfigureAwait(false);
@@ -57,7 +53,6 @@ internal sealed class BrokerHostedService : IHostedService
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         Log.BrokerStopping(_logger, _options.Name);
-
         try
         {
             await _listener.StopAsync(cancellationToken).ConfigureAwait(false);

@@ -1,10 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Buffers;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Amqp.Net.Protocol.Types;
@@ -90,14 +88,12 @@ public static class AmqpEncoder
             buffer[0] = FormatCode.UInt0;
             return 1;
         }
-        
         if (value <= 255)
         {
             buffer[0] = FormatCode.SmallUInt;
             buffer[1] = (byte)value;
             return 2;
         }
-        
         buffer[0] = FormatCode.UInt;
         BinaryPrimitives.WriteUInt32BigEndian(buffer[1..], value);
         return 5;
@@ -115,7 +111,6 @@ public static class AmqpEncoder
             buffer[1] = (byte)value;
             return 2;
         }
-        
         buffer[0] = FormatCode.Int;
         BinaryPrimitives.WriteInt32BigEndian(buffer[1..], value);
         return 5;
@@ -132,14 +127,12 @@ public static class AmqpEncoder
             buffer[0] = FormatCode.ULong0;
             return 1;
         }
-        
         if (value <= 255)
         {
             buffer[0] = FormatCode.SmallULong;
             buffer[1] = (byte)value;
             return 2;
         }
-        
         buffer[0] = FormatCode.ULong;
         BinaryPrimitives.WriteUInt64BigEndian(buffer[1..], value);
         return 9;
@@ -157,7 +150,6 @@ public static class AmqpEncoder
             buffer[1] = (byte)value;
             return 2;
         }
-        
         buffer[0] = FormatCode.Long;
         BinaryPrimitives.WriteInt64BigEndian(buffer[1..], value);
         return 9;
@@ -241,7 +233,6 @@ public static class AmqpEncoder
             value.CopyTo(buffer[2..]);
             return 2 + value.Length;
         }
-        
         buffer[0] = FormatCode.VBin32;
         BinaryPrimitives.WriteUInt32BigEndian(buffer[1..], (uint)value.Length);
         value.CopyTo(buffer[5..]);
@@ -261,8 +252,7 @@ public static class AmqpEncoder
         }
 
         // Calculate UTF-8 byte count
-        int byteCount = Encoding.UTF8.GetByteCount(value);
-        
+        var byteCount = Encoding.UTF8.GetByteCount(value);
         if (byteCount <= 255)
         {
             buffer[0] = FormatCode.Str8;
@@ -270,7 +260,6 @@ public static class AmqpEncoder
             Encoding.UTF8.GetBytes(value, buffer[2..]);
             return 2 + byteCount;
         }
-        
         buffer[0] = FormatCode.Str32;
         BinaryPrimitives.WriteUInt32BigEndian(buffer[1..], (uint)byteCount);
         Encoding.UTF8.GetBytes(value, buffer[5..]);
@@ -286,7 +275,6 @@ public static class AmqpEncoder
         {
             return EncodeNull(buffer);
         }
-        
         return EncodeString(buffer, value.AsSpan());
     }
 
@@ -303,8 +291,7 @@ public static class AmqpEncoder
         }
 
         // Symbols are ASCII, so byte count equals char count
-        int byteCount = value.Length;
-        
+        var byteCount = value.Length;
         if (byteCount <= 255)
         {
             buffer[0] = FormatCode.Sym8;
@@ -312,7 +299,6 @@ public static class AmqpEncoder
             Encoding.ASCII.GetBytes(value, buffer[2..]);
             return 2 + byteCount;
         }
-        
         buffer[0] = FormatCode.Sym32;
         BinaryPrimitives.WriteUInt32BigEndian(buffer[1..], (uint)byteCount);
         Encoding.ASCII.GetBytes(value, buffer[5..]);
@@ -328,7 +314,6 @@ public static class AmqpEncoder
         {
             return EncodeNull(buffer);
         }
-        
         return EncodeSymbol(buffer, value.AsSpan());
     }
 
@@ -362,7 +347,6 @@ public static class AmqpEncoder
             buffer[0] = FormatCode.List0;
             return 1;
         }
-        
         if (size <= 255 && count <= 255)
         {
             buffer[0] = FormatCode.List8;
@@ -370,7 +354,6 @@ public static class AmqpEncoder
             buffer[2] = (byte)count;
             return 3;
         }
-        
         buffer[0] = FormatCode.List32;
         BinaryPrimitives.WriteUInt32BigEndian(buffer[1..], (uint)size);
         BinaryPrimitives.WriteUInt32BigEndian(buffer[5..], (uint)count);
@@ -390,7 +373,6 @@ public static class AmqpEncoder
             buffer[2] = (byte)count;
             return 3;
         }
-        
         buffer[0] = FormatCode.Map32;
         BinaryPrimitives.WriteUInt32BigEndian(buffer[1..], (uint)size);
         BinaryPrimitives.WriteUInt32BigEndian(buffer[5..], (uint)count);
@@ -409,7 +391,6 @@ public static class AmqpEncoder
             buffer[2] = (byte)count;
             return 3;
         }
-        
         buffer[0] = FormatCode.Array32;
         BinaryPrimitives.WriteUInt32BigEndian(buffer[1..], (uint)size);
         BinaryPrimitives.WriteUInt32BigEndian(buffer[5..], (uint)count);
@@ -425,8 +406,7 @@ public static class AmqpEncoder
         {
             return 2; // format code + zero length
         }
-
-        int byteCount = Encoding.UTF8.GetByteCount(value);
+        var byteCount = Encoding.UTF8.GetByteCount(value);
         return byteCount <= 255 ? 2 + byteCount : 5 + byteCount;
     }
 
@@ -439,17 +419,13 @@ public static class AmqpEncoder
         {
             return 2;
         }
-
         return value.Length <= 255 ? 2 + value.Length : 5 + value.Length;
     }
 
     /// <summary>
     /// Calculates the encoded size of binary data without actually encoding it.
     /// </summary>
-    public static int GetEncodedBinarySize(int length)
-    {
-        return length <= 255 ? 2 + length : 5 + length;
-    }
+    public static int GetEncodedBinarySize(int length) => length <= 255 ? 2 + length : 5 + length;
 
     /// <summary>
     /// Encodes a map with string keys and object values.
@@ -464,9 +440,8 @@ public static class AmqpEncoder
 
         // First pass: calculate body size
         Span<byte> bodyBuffer = stackalloc byte[4096];
-        int bodySize = 0;
-        int pairCount = 0;
-
+        var bodySize = 0;
+        var pairCount = 0;
         foreach (var kvp in map)
         {
             // Encode key as symbol
@@ -475,24 +450,19 @@ public static class AmqpEncoder
             bodySize += EncodeValue(bodyBuffer[bodySize..], kvp.Value);
             pairCount++;
         }
-
-        int offset = 0;
+        var offset = 0;
         // Map header (count is number of items, which is pairs * 2)
         offset += EncodeMapHeader(buffer[offset..], bodySize, pairCount * 2);
         // Copy body
         bodyBuffer[..bodySize].CopyTo(buffer[offset..]);
         offset += bodySize;
-
         return offset;
     }
 
     /// <summary>
     /// Encodes a map with symbol keys (for annotations).
     /// </summary>
-    public static int EncodeSymbolMap(Span<byte> buffer, IReadOnlyDictionary<string, object?>? map)
-    {
-        return EncodeMap(buffer, map);
-    }
+    public static int EncodeSymbolMap(Span<byte> buffer, IReadOnlyDictionary<string, object?>? map) => EncodeMap(buffer, map);
 
     /// <summary>
     /// Encodes a symbol array (for capabilities, locales).
@@ -503,22 +473,23 @@ public static class AmqpEncoder
         {
             return EncodeNull(buffer);
         }
-
         if (values.Length == 1)
         {
             return EncodeSymbol(buffer, values[0]);
         }
 
         // Calculate array body size
-        int bodySize = 0;
-        bool useSmall = true;
+        var bodySize = 0;
+        var useSmall = true;
         foreach (var value in values)
         {
-            if (value.Length > 255) useSmall = false;
+            if (value.Length > 255)
+            {
+                useSmall = false;
+            }
             bodySize += useSmall ? 1 + value.Length : 4 + value.Length;
         }
-
-        int offset = 0;
+        var offset = 0;
 
         // Array header (size includes constructor byte)
         offset += EncodeArrayHeader(buffer[offset..], bodySize + 1, values.Length);
@@ -543,7 +514,6 @@ public static class AmqpEncoder
                 offset += value.Length;
             }
         }
-
         return offset;
     }
 
@@ -554,29 +524,29 @@ public static class AmqpEncoder
     {
         return value switch
         {
-            null => EncodeNull(buffer),
-            bool b => EncodeBoolean(buffer, b),
-            byte ub => EncodeUByte(buffer, ub),
-            sbyte sb => EncodeByte(buffer, sb),
-            ushort us => EncodeUShort(buffer, us),
-            short s => EncodeShort(buffer, s),
-            uint ui => EncodeUInt(buffer, ui),
-            int i => EncodeInt(buffer, i),
-            ulong ul => EncodeULong(buffer, ul),
-            long l => EncodeLong(buffer, l),
-            float f => EncodeFloat(buffer, f),
-            double d => EncodeDouble(buffer, d),
-            char c => EncodeChar(buffer, c),
-            Guid g => EncodeUuid(buffer, g),
-            DateTimeOffset dto => EncodeTimestamp(buffer, dto),
-            DateTime dt => EncodeTimestamp(buffer, new DateTimeOffset(dt)),
-            string str => EncodeString(buffer, str),
-            byte[] bytes => EncodeBinary(buffer, bytes),
-            ReadOnlyMemory<byte> mem => EncodeBinary(buffer, mem.Span),
+            null                                     => EncodeNull(buffer),
+            bool b                                   => EncodeBoolean(buffer, b),
+            byte ub                                  => EncodeUByte(buffer, ub),
+            sbyte sb                                 => EncodeByte(buffer, sb),
+            ushort us                                => EncodeUShort(buffer, us),
+            short s                                  => EncodeShort(buffer, s),
+            uint ui                                  => EncodeUInt(buffer, ui),
+            int i                                    => EncodeInt(buffer, i),
+            ulong ul                                 => EncodeULong(buffer, ul),
+            long l                                   => EncodeLong(buffer, l),
+            float f                                  => EncodeFloat(buffer, f),
+            double d                                 => EncodeDouble(buffer, d),
+            char c                                   => EncodeChar(buffer, c),
+            Guid g                                   => EncodeUuid(buffer, g),
+            DateTimeOffset dto                       => EncodeTimestamp(buffer, dto),
+            DateTime dt                              => EncodeTimestamp(buffer, new DateTimeOffset(dt)),
+            string str                               => EncodeString(buffer, str),
+            byte[] bytes                             => EncodeBinary(buffer, bytes),
+            ReadOnlyMemory<byte> mem                 => EncodeBinary(buffer, mem.Span),
             IReadOnlyDictionary<string, object?> map => EncodeMap(buffer, map),
-            string[] symbols => EncodeSymbolArray(buffer, symbols),
-            IReadOnlyList<object?> list => EncodeList(buffer, list),
-            _ => throw new ArgumentException($"Cannot encode value of type {value.GetType().Name}")
+            string[] symbols                         => EncodeSymbolArray(buffer, symbols),
+            IReadOnlyList<object?> list              => EncodeList(buffer, list),
+            _                                        => throw new ArgumentException($"Cannot encode value of type {value.GetType().Name}")
         };
     }
 
@@ -593,18 +563,15 @@ public static class AmqpEncoder
 
         // First pass: encode to temp buffer
         Span<byte> bodyBuffer = stackalloc byte[4096];
-        int bodySize = 0;
-
+        var bodySize = 0;
         foreach (var item in list)
         {
             bodySize += EncodeValue(bodyBuffer[bodySize..], item);
         }
-
-        int offset = 0;
+        var offset = 0;
         offset += EncodeListHeader(buffer[offset..], bodySize, list.Count);
         bodyBuffer[..bodySize].CopyTo(buffer[offset..]);
         offset += bodySize;
-
         return offset;
     }
 
@@ -615,25 +582,33 @@ public static class AmqpEncoder
     {
         return value switch
         {
-            null => 1,
-            bool => 1,
-            byte => 2,
-            sbyte => 2,
+            null   => 1,
+            bool   => 1,
+            byte   => 2,
+            sbyte  => 2,
             ushort => 3,
-            short => 3,
-            uint ui => ui == 0 ? 1 : ui <= 255 ? 2 : 5,
+            short  => 3,
+            uint ui => ui == 0
+                           ? 1
+                           : ui <= 255
+                               ? 2
+                               : 5,
             int i => i is >= -128 and <= 127 ? 2 : 5,
-            ulong ul => ul == 0 ? 1 : ul <= 255 ? 2 : 9,
-            long l => l is >= -128 and <= 127 ? 2 : 9,
-            float => 5,
-            double => 9,
-            char => 5,
-            Guid => 17,
+            ulong ul => ul == 0
+                            ? 1
+                            : ul <= 255
+                                ? 2
+                                : 9,
+            long l         => l is >= -128 and <= 127 ? 2 : 9,
+            float          => 5,
+            double         => 9,
+            char           => 5,
+            Guid           => 17,
             DateTimeOffset => 9,
-            DateTime => 9,
-            string str => GetEncodedStringSize(str.AsSpan()),
-            byte[] bytes => GetEncodedBinarySize(bytes.Length),
-            _ => throw new ArgumentException($"Cannot calculate size for type {value.GetType().Name}")
+            DateTime       => 9,
+            string str     => GetEncodedStringSize(str.AsSpan()),
+            byte[] bytes   => GetEncodedBinarySize(bytes.Length),
+            _              => throw new ArgumentException($"Cannot calculate size for type {value.GetType().Name}")
         };
     }
 
@@ -645,7 +620,7 @@ public static class AmqpEncoder
         // Get the raw bytes
         Span<byte> guidBytes = stackalloc byte[16];
         value.TryWriteBytes(guidBytes);
-        
+
         // .NET stores GUIDs in little-endian for the first 3 components
         // RFC 4122 requires big-endian, so we need to swap
         // time_low (4 bytes)
@@ -653,15 +628,15 @@ public static class AmqpEncoder
         buffer[1] = guidBytes[2];
         buffer[2] = guidBytes[1];
         buffer[3] = guidBytes[0];
-        
+
         // time_mid (2 bytes)
         buffer[4] = guidBytes[5];
         buffer[5] = guidBytes[4];
-        
+
         // time_hi_and_version (2 bytes)
         buffer[6] = guidBytes[7];
         buffer[7] = guidBytes[6];
-        
+
         // clock_seq_hi_and_reserved, clock_seq_low, node (8 bytes) - already in correct order
         guidBytes[8..16].CopyTo(buffer[8..]);
     }

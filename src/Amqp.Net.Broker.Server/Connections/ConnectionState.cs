@@ -72,46 +72,32 @@ public static class ConnectionStateExtensions
     /// <summary>
     /// Returns true if the connection is in a state where it can send frames.
     /// </summary>
-    public static bool CanSend(this ConnectionState state)
-    {
-        return state is ConnectionState.Opened or ConnectionState.CloseReceived;
-    }
+    public static bool CanSend(this ConnectionState state) => state is ConnectionState.Opened or ConnectionState.CloseReceived;
 
     /// <summary>
     /// Returns true if the connection is in a state where it can receive frames.
     /// </summary>
-    public static bool CanReceive(this ConnectionState state)
-    {
-        return state is ConnectionState.Opened or ConnectionState.ClosePipe;
-    }
+    public static bool CanReceive(this ConnectionState state) => state is ConnectionState.Opened or ConnectionState.ClosePipe;
 
     /// <summary>
     /// Returns true if the connection is in a terminal state.
     /// </summary>
-    public static bool IsTerminal(this ConnectionState state)
-    {
-        return state == ConnectionState.End;
-    }
+    public static bool IsTerminal(this ConnectionState state) => state == ConnectionState.End;
 
     /// <summary>
     /// Returns true if the connection is in the process of opening.
     /// </summary>
-    public static bool IsOpening(this ConnectionState state)
-    {
-        return state is ConnectionState.Start 
-            or ConnectionState.HeaderReceived 
-            or ConnectionState.HeaderSent 
+    public static bool IsOpening(this ConnectionState state) =>
+        state is ConnectionState.Start
+            or ConnectionState.HeaderReceived
+            or ConnectionState.HeaderSent
             or ConnectionState.HeaderExchanged
-            or ConnectionState.OpenPipe 
-            or ConnectionState.OpenReceived 
+            or ConnectionState.OpenPipe
+            or ConnectionState.OpenReceived
             or ConnectionState.OpenSent;
-    }
 
     /// <summary>
     /// Returns true if the connection is in the process of closing.
     /// </summary>
-    public static bool IsClosing(this ConnectionState state)
-    {
-        return state is ConnectionState.ClosePipe or ConnectionState.CloseReceived;
-    }
+    public static bool IsClosing(this ConnectionState state) => state is ConnectionState.ClosePipe or ConnectionState.CloseReceived;
 }

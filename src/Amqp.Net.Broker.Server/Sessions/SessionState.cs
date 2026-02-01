@@ -52,32 +52,20 @@ public static class AmqpSessionStateExtensions
     /// <summary>
     /// Returns true if the session is in a state where it can send frames.
     /// </summary>
-    public static bool CanSend(this AmqpSessionState state)
-    {
-        return state is AmqpSessionState.Mapped or AmqpSessionState.EndReceived;
-    }
+    public static bool CanSend(this AmqpSessionState state) => state is AmqpSessionState.Mapped or AmqpSessionState.EndReceived;
 
     /// <summary>
     /// Returns true if the session is in a state where it can receive frames.
     /// </summary>
-    public static bool CanReceive(this AmqpSessionState state)
-    {
-        return state is AmqpSessionState.Mapped or AmqpSessionState.EndSent;
-    }
+    public static bool CanReceive(this AmqpSessionState state) => state is AmqpSessionState.Mapped or AmqpSessionState.EndSent;
 
     /// <summary>
     /// Returns true if the session is in a terminal state.
     /// </summary>
-    public static bool IsTerminal(this AmqpSessionState state)
-    {
-        return state == AmqpSessionState.Discarding;
-    }
+    public static bool IsTerminal(this AmqpSessionState state) => state == AmqpSessionState.Discarding;
 
     /// <summary>
     /// Returns true if the session is operational.
     /// </summary>
-    public static bool IsOperational(this AmqpSessionState state)
-    {
-        return state == AmqpSessionState.Mapped;
-    }
+    public static bool IsOperational(this AmqpSessionState state) => state == AmqpSessionState.Mapped;
 }

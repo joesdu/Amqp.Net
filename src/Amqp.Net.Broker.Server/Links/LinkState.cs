@@ -47,32 +47,20 @@ public static class LinkStateExtensions
     /// <summary>
     /// Returns true if the link is in a state where it can send transfers.
     /// </summary>
-    public static bool CanSend(this LinkState state)
-    {
-        return state is LinkState.Attached or LinkState.DetachReceived;
-    }
+    public static bool CanSend(this LinkState state) => state is LinkState.Attached or LinkState.DetachReceived;
 
     /// <summary>
     /// Returns true if the link is in a state where it can receive transfers.
     /// </summary>
-    public static bool CanReceive(this LinkState state)
-    {
-        return state is LinkState.Attached or LinkState.DetachSent;
-    }
+    public static bool CanReceive(this LinkState state) => state is LinkState.Attached or LinkState.DetachSent;
 
     /// <summary>
     /// Returns true if the link is in a terminal state.
     /// </summary>
-    public static bool IsTerminal(this LinkState state)
-    {
-        return state == LinkState.Detached;
-    }
+    public static bool IsTerminal(this LinkState state) => state == LinkState.Detached;
 
     /// <summary>
     /// Returns true if the link is operational.
     /// </summary>
-    public static bool IsOperational(this LinkState state)
-    {
-        return state == LinkState.Attached;
-    }
+    public static bool IsOperational(this LinkState state) => state == LinkState.Attached;
 }

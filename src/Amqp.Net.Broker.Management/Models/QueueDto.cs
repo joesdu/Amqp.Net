@@ -76,7 +76,6 @@ public sealed record QueueDto
     public static QueueDto FromQueue(IQueue queue)
     {
         ArgumentNullException.ThrowIfNull(queue);
-
         return new()
         {
             Name = queue.Name,
@@ -148,17 +147,18 @@ public sealed record CreateQueueRequest
     /// <summary>
     /// Converts to QueueOptions.
     /// </summary>
-    public QueueOptions ToQueueOptions() => new()
-    {
-        Durable = Durable,
-        Exclusive = Exclusive,
-        AutoDelete = AutoDelete,
-        MaxLength = MaxLength,
-        MaxLengthBytes = MaxLengthBytes,
-        MessageTtl = MessageTtlMs.HasValue ? TimeSpan.FromMilliseconds(MessageTtlMs.Value) : null,
-        DeadLetterExchange = DeadLetterExchange,
-        DeadLetterRoutingKey = DeadLetterRoutingKey
-    };
+    public QueueOptions ToQueueOptions() =>
+        new()
+        {
+            Durable = Durable,
+            Exclusive = Exclusive,
+            AutoDelete = AutoDelete,
+            MaxLength = MaxLength,
+            MaxLengthBytes = MaxLengthBytes,
+            MessageTtl = MessageTtlMs.HasValue ? TimeSpan.FromMilliseconds(MessageTtlMs.Value) : null,
+            DeadLetterExchange = DeadLetterExchange,
+            DeadLetterRoutingKey = DeadLetterRoutingKey
+        };
 }
 
 /// <summary>

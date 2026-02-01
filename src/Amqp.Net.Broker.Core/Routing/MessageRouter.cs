@@ -23,10 +23,10 @@ public sealed class MessageRouter : IMessageRouter
     public MessageRouter()
     {
         // Create default exchanges
-        _exchanges.TryAdd("", new DirectExchange("", durable: true)); // Default direct exchange
-        _exchanges.TryAdd("amq.direct", new DirectExchange("amq.direct", durable: true));
-        _exchanges.TryAdd("amq.topic", new TopicExchange("amq.topic", durable: true));
-        _exchanges.TryAdd("amq.fanout", new FanoutExchange("amq.fanout", durable: true));
+        _exchanges.TryAdd("", new DirectExchange("", true)); // Default direct exchange
+        _exchanges.TryAdd("amq.direct", new DirectExchange("amq.direct", true));
+        _exchanges.TryAdd("amq.topic", new TopicExchange("amq.topic", true));
+        _exchanges.TryAdd("amq.fanout", new FanoutExchange("amq.fanout", true));
     }
 
     /// <inheritdoc />
@@ -47,24 +47,20 @@ public sealed class MessageRouter : IMessageRouter
         {
             return 0;
         }
-
         var queueNames = exchange.Route(routingKey);
         if (queueNames.Count == 0)
         {
             return 0;
         }
-
-        int routed = 0;
+        var routed = 0;
         var messageId = Interlocked.Increment(ref _nextMessageId);
         var now = DateTimeOffset.UtcNow;
-
         foreach (var queueName in queueNames)
         {
             if (!_queues.TryGetValue(queueName, out var queue))
             {
                 continue;
             }
-
             var message = new StoredMessage
             {
                 MessageId = messageId,
@@ -81,13 +77,11 @@ public sealed class MessageRouter : IMessageRouter
                 Priority = properties?.Priority ?? 0,
                 Durable = properties?.Durable ?? false
             };
-
             if (await queue.EnqueueAsync(message, cancellationToken).ConfigureAwait(false))
             {
                 routed++;
             }
         }
-
         return routed;
     }
 
@@ -95,13 +89,12 @@ public sealed class MessageRouter : IMessageRouter
     public IExchange DeclareExchange(string name, ExchangeType type, bool durable = false, bool autoDelete = false)
     {
         ArgumentNullException.ThrowIfNull(name);
-
         return _exchanges.GetOrAdd(name, _ => type switch
         {
             ExchangeType.Direct => new DirectExchange(name, durable, autoDelete),
-            ExchangeType.Topic => new TopicExchange(name, durable, autoDelete),
+            ExchangeType.Topic  => new TopicExchange(name, durable, autoDelete),
             ExchangeType.Fanout => new FanoutExchange(name, durable, autoDelete),
-            _ => throw new ArgumentException($"Unsupported exchange type: {type}", nameof(type))
+            _                   => throw new ArgumentException($"Unsupported exchange type: {type}", nameof(type))
         });
     }
 
@@ -115,7 +108,6 @@ public sealed class MessageRouter : IMessageRouter
         {
             return false;
         }
-
         return _exchanges.TryRemove(name, out _);
     }
 
@@ -123,20 +115,18 @@ public sealed class MessageRouter : IMessageRouter
     public IQueue DeclareQueue(string name, QueueOptions? options = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
         var queue = _queues.GetOrAdd(name, _ => new AmqpQueue(name, options));
 
         // Auto-bind to default exchange with queue name as routing key
         if (_exchanges.TryGetValue("", out var defaultExchange))
         {
-            defaultExchange.AddBinding(new Binding
+            defaultExchange.AddBinding(new()
             {
                 QueueName = name,
                 ExchangeName = "",
                 RoutingKey = name
             });
         }
-
         return queue;
     }
 
@@ -144,7 +134,6 @@ public sealed class MessageRouter : IMessageRouter
     public bool DeleteQueue(string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
         if (_queues.TryRemove(name, out var queue))
         {
             // Remove all bindings to this queue
@@ -158,10 +147,8 @@ public sealed class MessageRouter : IMessageRouter
             {
                 _ = disposable.DisposeAsync().AsTask();
             }
-
             return true;
         }
-
         return false;
     }
 
@@ -170,18 +157,15 @@ public sealed class MessageRouter : IMessageRouter
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(queueName);
         ArgumentNullException.ThrowIfNull(exchangeName);
-
         if (!_exchanges.TryGetValue(exchangeName, out var exchange))
         {
             throw new InvalidOperationException($"Exchange '{exchangeName}' not found");
         }
-
         if (!_queues.ContainsKey(queueName))
         {
             throw new InvalidOperationException($"Queue '{queueName}' not found");
         }
-
-        exchange.AddBinding(new Binding
+        exchange.AddBinding(new()
         {
             QueueName = queueName,
             ExchangeName = exchangeName,
@@ -194,7 +178,6 @@ public sealed class MessageRouter : IMessageRouter
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(queueName);
         ArgumentNullException.ThrowIfNull(exchangeName);
-
         if (_exchanges.TryGetValue(exchangeName, out var exchange))
         {
             exchange.RemoveBinding(queueName, routingKey);

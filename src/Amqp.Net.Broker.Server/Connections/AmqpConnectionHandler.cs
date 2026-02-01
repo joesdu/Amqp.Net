@@ -13,9 +13,9 @@ namespace Amqp.Net.Broker.Server.Connections;
 /// </summary>
 public sealed class AmqpConnectionHandler : IAmqpConnectionHandler
 {
-    private readonly AmqpServerOptions _options;
-    private readonly ILoggerFactory _loggerFactory;
     private readonly IBrokerLinkHandler _linkHandler;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly AmqpServerOptions _options;
 
     /// <summary>
     /// Creates a new connection handler.
@@ -28,7 +28,6 @@ public sealed class AmqpConnectionHandler : IAmqpConnectionHandler
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(loggerFactory);
         ArgumentNullException.ThrowIfNull(linkHandler);
-
         _options = options.Value;
         _loggerFactory = loggerFactory;
         _linkHandler = linkHandler;
@@ -38,10 +37,8 @@ public sealed class AmqpConnectionHandler : IAmqpConnectionHandler
     public async Task HandleConnectionAsync(AmqpConnectionContext context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
-
         var connectionLogger = _loggerFactory.CreateLogger<AmqpConnection>();
         var connection = new AmqpConnection(context, _options, connectionLogger, _linkHandler);
-
         await using (connection.ConfigureAwait(false))
         {
             await connection.RunAsync(cancellationToken).ConfigureAwait(false);

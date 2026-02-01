@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Amqp.Net.Broker.Core.Exchanges;
-using Amqp.Net.Broker.Core.Messages;
 using Amqp.Net.Broker.Core.Queues;
 
 namespace Amqp.Net.Broker.Core.Routing;
@@ -12,6 +11,16 @@ namespace Amqp.Net.Broker.Core.Routing;
 /// </summary>
 public interface IMessageRouter
 {
+    /// <summary>
+    /// Gets all exchanges.
+    /// </summary>
+    IReadOnlyList<IExchange> Exchanges { get; }
+
+    /// <summary>
+    /// Gets all queues.
+    /// </summary>
+    IReadOnlyList<IQueue> Queues { get; }
+
     /// <summary>
     /// Routes a message through an exchange to matching queues.
     /// </summary>
@@ -89,16 +98,6 @@ public interface IMessageRouter
     /// <param name="name">The queue name.</param>
     /// <returns>The queue, or null if not found.</returns>
     IQueue? GetQueue(string name);
-
-    /// <summary>
-    /// Gets all exchanges.
-    /// </summary>
-    IReadOnlyList<IExchange> Exchanges { get; }
-
-    /// <summary>
-    /// Gets all queues.
-    /// </summary>
-    IReadOnlyList<IQueue> Queues { get; }
 }
 
 /// <summary>

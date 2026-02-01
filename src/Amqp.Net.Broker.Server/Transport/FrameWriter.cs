@@ -13,9 +13,9 @@ namespace Amqp.Net.Broker.Server.Transport;
 /// </summary>
 internal sealed class FrameWriter : IDisposable
 {
-    private readonly PipeWriter _writer;
     private readonly uint _maxFrameSize;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
+    private readonly PipeWriter _writer;
     private bool _disposed;
 
     /// <summary>
@@ -25,6 +25,19 @@ internal sealed class FrameWriter : IDisposable
     {
         _writer = writer;
         _maxFrameSize = maxFrameSize;
+    }
+
+    /// <summary>
+    /// Disposes the frame writer.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+        _disposed = true;
+        _writeLock.Dispose();
     }
 
     /// <summary>
@@ -49,15 +62,13 @@ internal sealed class FrameWriter : IDisposable
         CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-
         await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             // Encode performative
-            int performativeSize = performative.GetEncodedSize();
-            int bodySize = performativeSize + payload.Length;
-            int frameSize = FrameHeader.Size + bodySize;
-
+            var performativeSize = performative.GetEncodedSize();
+            var bodySize = performativeSize + payload.Length;
+            var frameSize = FrameHeader.Size + bodySize;
             if (frameSize > _maxFrameSize)
             {
                 throw new AmqpConnectionException($"Frame size {frameSize} exceeds maximum {_maxFrameSize}");
@@ -72,14 +83,13 @@ internal sealed class FrameWriter : IDisposable
             header.Write(span);
 
             // Write performative
-            int written = performative.Encode(span[FrameHeader.Size..]);
+            var written = performative.Encode(span[FrameHeader.Size..]);
 
             // Write payload if present
             if (!payload.IsEmpty)
             {
                 payload.Span.CopyTo(span[(FrameHeader.Size + written)..]);
             }
-
             _writer.Advance(frameSize);
             await _writer.FlushAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -95,14 +105,12 @@ internal sealed class FrameWriter : IDisposable
     public async ValueTask WriteHeartbeatAsync(ushort channel, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-
         await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var memory = _writer.GetMemory(FrameHeader.Size);
             var header = FrameHeader.CreateHeartbeat(channel);
             header.Write(memory.Span);
-
             _writer.Advance(FrameHeader.Size);
             await _writer.FlushAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -118,7 +126,6 @@ internal sealed class FrameWriter : IDisposable
     public async ValueTask WriteRawAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-
         await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -131,19 +138,5 @@ internal sealed class FrameWriter : IDisposable
         {
             _writeLock.Release();
         }
-    }
-
-    /// <summary>
-    /// Disposes the frame writer.
-    /// </summary>
-    public void Dispose()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _disposed = true;
-        _writeLock.Dispose();
     }
 }

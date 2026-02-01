@@ -52,7 +52,6 @@ public sealed class DirectExchange : IExchange
     public void AddBinding(Binding binding)
     {
         ArgumentNullException.ThrowIfNull(binding);
-
         lock (_lock)
         {
             // Check for duplicate
@@ -68,10 +67,9 @@ public sealed class DirectExchange : IExchange
     {
         lock (_lock)
         {
-            int removed = routingKey == null
-                ? _bindings.RemoveAll(b => b.QueueName == queueName)
-                : _bindings.RemoveAll(b => b.QueueName == queueName && b.RoutingKey == routingKey);
-
+            var removed = routingKey == null
+                              ? _bindings.RemoveAll(b => b.QueueName == queueName)
+                              : _bindings.RemoveAll(b => b.QueueName == queueName && b.RoutingKey == routingKey);
             return removed > 0;
         }
     }
@@ -82,10 +80,10 @@ public sealed class DirectExchange : IExchange
         lock (_lock)
         {
             return _bindings
-                .Where(b => b.RoutingKey == routingKey)
-                .Select(b => b.QueueName)
-                .Distinct()
-                .ToList();
+                   .Where(b => b.RoutingKey == routingKey)
+                   .Select(b => b.QueueName)
+                   .Distinct()
+                   .ToList();
         }
     }
 }

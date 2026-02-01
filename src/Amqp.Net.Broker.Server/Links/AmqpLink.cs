@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
-using Amqp.Net.Broker.Server.Connections;
-using Amqp.Net.Broker.Server.Exceptions;
 using Amqp.Net.Broker.Server.Logging;
 using Amqp.Net.Broker.Server.Sessions;
 using Amqp.Net.Broker.Server.Transport;
@@ -18,18 +16,11 @@ namespace Amqp.Net.Broker.Server.Links;
 /// </summary>
 public sealed class AmqpLink
 {
-    private readonly AmqpSession _session;
     private readonly FrameWriter _frameWriter;
     private readonly ILogger _logger;
     private readonly ConcurrentDictionary<uint, AmqpDelivery> _unsettledDeliveries = new();
 
-    private LinkState _state = LinkState.Detached;
-    private Attach? _remoteAttach;
-    private Attach? _localAttach;
-    
     // Flow control
-    private uint _deliveryCount;
-    private uint _linkCredit;
     private bool _drain;
 
     /// <summary>
@@ -44,7 +35,7 @@ public sealed class AmqpLink
         FrameWriter frameWriter,
         ILogger logger)
     {
-        _session = session;
+        Session = session;
         Name = name;
         LocalHandle = localHandle;
         RemoteHandle = remoteHandle;
@@ -87,42 +78,42 @@ public sealed class AmqpLink
     /// <summary>
     /// Gets the current link state.
     /// </summary>
-    public LinkState State => _state;
+    public LinkState State { get; private set; } = LinkState.Detached;
 
     /// <summary>
     /// Gets the session this link belongs to.
     /// </summary>
-    public AmqpSession Session => _session;
+    public AmqpSession Session { get; }
 
     /// <summary>
     /// Gets the remote Attach performative.
     /// </summary>
-    public Attach? RemoteAttach => _remoteAttach;
+    public Attach? RemoteAttach { get; private set; }
 
     /// <summary>
     /// Gets the local Attach performative.
     /// </summary>
-    public Attach? LocalAttach => _localAttach;
+    public Attach? LocalAttach { get; private set; }
 
     /// <summary>
     /// Gets the source address.
     /// </summary>
-    public string? SourceAddress => _remoteAttach?.Source?.Address ?? _localAttach?.Source?.Address;
+    public string? SourceAddress => RemoteAttach?.Source?.Address ?? LocalAttach?.Source?.Address;
 
     /// <summary>
     /// Gets the target address.
     /// </summary>
-    public string? TargetAddress => _remoteAttach?.Target?.Address ?? _localAttach?.Target?.Address;
+    public string? TargetAddress => RemoteAttach?.Target?.Address ?? LocalAttach?.Target?.Address;
 
     /// <summary>
     /// Gets the current delivery count.
     /// </summary>
-    public uint DeliveryCount => _deliveryCount;
+    public uint DeliveryCount { get; private set; }
 
     /// <summary>
     /// Gets the current link credit.
     /// </summary>
-    public uint LinkCredit => _linkCredit;
+    public uint LinkCredit { get; private set; }
 
     /// <summary>
     /// Callback invoked when a message is received on this link.
@@ -134,13 +125,12 @@ public sealed class AmqpLink
     /// </summary>
     internal async Task HandleAttachAsync(Attach attach, CancellationToken cancellationToken)
     {
-        _remoteAttach = attach;
-
-        Log.LinkAttachProcessed(_logger, _session.Connection.ConnectionId, _session.LocalChannel, 
+        RemoteAttach = attach;
+        Log.LinkAttachProcessed(_logger, Session.Connection.ConnectionId, Session.LocalChannel,
             Name, LocalHandle, attach.Role ? "receiver" : "sender");
 
         // Create our Attach response
-        _localAttach = new Attach
+        LocalAttach = new()
         {
             Name = Name,
             Handle = LocalHandle,
@@ -151,12 +141,10 @@ public sealed class AmqpLink
             Target = attach.Target,
             InitialDeliveryCount = IsSender ? 0u : null
         };
-
-        await _frameWriter.WriteFrameAsync(_session.LocalChannel, _localAttach, cancellationToken)
-            .ConfigureAwait(false);
-
-        _state = LinkState.Attached;
-        Log.LinkAttached(_logger, _session.Connection.ConnectionId, _session.LocalChannel, Name, LocalHandle);
+        await _frameWriter.WriteFrameAsync(Session.LocalChannel, LocalAttach, cancellationToken)
+                          .ConfigureAwait(false);
+        State = LinkState.Attached;
+        Log.LinkAttached(_logger, Session.Connection.ConnectionId, Session.LocalChannel, Name, LocalHandle);
 
         // If we're a receiver, grant initial credit
         if (IsReceiver)
@@ -170,32 +158,27 @@ public sealed class AmqpLink
     /// </summary>
     internal async Task HandleDetachAsync(Detach detach, CancellationToken cancellationToken)
     {
-        Log.LinkDetachProcessed(_logger, _session.Connection.ConnectionId, _session.LocalChannel, 
+        Log.LinkDetachProcessed(_logger, Session.Connection.ConnectionId, Session.LocalChannel,
             Name, LocalHandle, detach.Closed, detach.Error?.Condition);
-
-        if (_state == LinkState.DetachSent)
+        if (State == LinkState.DetachSent)
         {
             // We already sent Detach
-            _state = LinkState.Detached;
+            State = LinkState.Detached;
         }
         else
         {
             // Send Detach response
-            _state = LinkState.DetachReceived;
-
+            State = LinkState.DetachReceived;
             var response = new Detach
             {
                 Handle = LocalHandle,
                 Closed = detach.Closed
             };
-
-            await _frameWriter.WriteFrameAsync(_session.LocalChannel, response, cancellationToken)
-                .ConfigureAwait(false);
-
-            _state = LinkState.Detached;
+            await _frameWriter.WriteFrameAsync(Session.LocalChannel, response, cancellationToken)
+                              .ConfigureAwait(false);
+            State = LinkState.Detached;
         }
-
-        Log.LinkDetached(_logger, _session.Connection.ConnectionId, _session.LocalChannel, Name, LocalHandle);
+        Log.LinkDetached(_logger, Session.Connection.ConnectionId, Session.LocalChannel, Name, LocalHandle);
     }
 
     /// <summary>
@@ -205,19 +188,15 @@ public sealed class AmqpLink
     {
         if (flow.DeliveryCount.HasValue)
         {
-            _deliveryCount = flow.DeliveryCount.Value;
+            DeliveryCount = flow.DeliveryCount.Value;
         }
-
         if (flow.LinkCredit.HasValue)
         {
-            _linkCredit = flow.LinkCredit.Value;
+            LinkCredit = flow.LinkCredit.Value;
         }
-
         _drain = flow.Drain;
-
-        Log.LinkFlowUpdated(_logger, _session.Connection.ConnectionId, _session.LocalChannel, 
-            Name, _deliveryCount, _linkCredit, _drain);
-
+        Log.LinkFlowUpdated(_logger, Session.Connection.ConnectionId, Session.LocalChannel,
+            Name, DeliveryCount, LinkCredit, _drain);
         return Task.CompletedTask;
     }
 
@@ -228,10 +207,9 @@ public sealed class AmqpLink
     {
         if (!IsReceiver)
         {
-            Log.UnexpectedTransferOnSender(_logger, _session.Connection.ConnectionId, _session.LocalChannel, Name);
+            Log.UnexpectedTransferOnSender(_logger, Session.Connection.ConnectionId, Session.LocalChannel, Name);
             return;
         }
-
         var settled = transfer.Settled ?? false;
         var delivery = new AmqpDelivery
         {
@@ -242,16 +220,13 @@ public sealed class AmqpLink
             More = transfer.More,
             Payload = payload
         };
-
         if (!settled)
         {
             _unsettledDeliveries.TryAdd(delivery.DeliveryId, delivery);
         }
-
-        _linkCredit--;
-        _deliveryCount++;
-
-        Log.TransferProcessed(_logger, _session.Connection.ConnectionId, _session.LocalChannel, 
+        LinkCredit--;
+        DeliveryCount++;
+        Log.TransferProcessed(_logger, Session.Connection.ConnectionId, Session.LocalChannel,
             Name, delivery.DeliveryId, payload.Length);
 
         // Notify handlers
@@ -261,7 +236,7 @@ public sealed class AmqpLink
         }
 
         // Auto-replenish credit if running low
-        if (_linkCredit < 50)
+        if (LinkCredit < 50)
         {
             await GrantCreditAsync(100, cancellationToken).ConfigureAwait(false);
         }
@@ -272,14 +247,13 @@ public sealed class AmqpLink
     /// </summary>
     internal void HandleDisposition(Disposition disposition)
     {
-        for (uint id = disposition.First; id <= (disposition.Last ?? disposition.First); id++)
+        for (var id = disposition.First; id <= (disposition.Last ?? disposition.First); id++)
         {
             if (_unsettledDeliveries.TryRemove(id, out var delivery))
             {
                 delivery.Settled = true;
                 delivery.DeliveryState = disposition.State;
-
-                Log.DeliverySettled(_logger, _session.Connection.ConnectionId, _session.LocalChannel, 
+                Log.DeliverySettled(_logger, Session.Connection.ConnectionId, Session.LocalChannel,
                     Name, id, disposition.State?.GetType().Name ?? "null");
             }
         }
@@ -294,24 +268,20 @@ public sealed class AmqpLink
         {
             throw new InvalidOperationException("Only receiver links can grant credit");
         }
-
-        _linkCredit += credit;
-
+        LinkCredit += credit;
         var flow = new Flow
         {
-            NextIncomingId = _session.NextIncomingId,
-            IncomingWindow = _session.IncomingWindow,
-            NextOutgoingId = _session.NextOutgoingId,
-            OutgoingWindow = _session.OutgoingWindow,
+            NextIncomingId = Session.NextIncomingId,
+            IncomingWindow = Session.IncomingWindow,
+            NextOutgoingId = Session.NextOutgoingId,
+            OutgoingWindow = Session.OutgoingWindow,
             Handle = LocalHandle,
-            DeliveryCount = _deliveryCount,
-            LinkCredit = _linkCredit
+            DeliveryCount = DeliveryCount,
+            LinkCredit = LinkCredit
         };
-
-        await _frameWriter.WriteFrameAsync(_session.LocalChannel, flow, cancellationToken)
-            .ConfigureAwait(false);
-
-        Log.CreditGranted(_logger, _session.Connection.ConnectionId, _session.LocalChannel, Name, credit, _linkCredit);
+        await _frameWriter.WriteFrameAsync(Session.LocalChannel, flow, cancellationToken)
+                          .ConfigureAwait(false);
+        Log.CreditGranted(_logger, Session.Connection.ConnectionId, Session.LocalChannel, Name, credit, LinkCredit);
     }
 
     /// <summary>
@@ -327,10 +297,8 @@ public sealed class AmqpLink
             Settled = true,
             State = state
         };
-
-        await _frameWriter.WriteFrameAsync(_session.LocalChannel, disposition, cancellationToken)
-            .ConfigureAwait(false);
-
+        await _frameWriter.WriteFrameAsync(Session.LocalChannel, disposition, cancellationToken)
+                          .ConfigureAwait(false);
         _unsettledDeliveries.TryRemove(deliveryId, out _);
     }
 
@@ -339,28 +307,26 @@ public sealed class AmqpLink
     /// </summary>
     public async Task DetachAsync(bool closed = true, string? errorCondition = null, string? errorDescription = null, CancellationToken cancellationToken = default)
     {
-        if (_state.IsTerminal() || _state == LinkState.DetachSent || _state == LinkState.DetachReceived)
+        if (State.IsTerminal() || State == LinkState.DetachSent || State == LinkState.DetachReceived)
         {
             return;
         }
-
-        _state = LinkState.DetachSent;
-
+        State = LinkState.DetachSent;
         var detach = new Detach
         {
             Handle = LocalHandle,
             Closed = closed,
-            Error = errorCondition != null ? new AmqpError
-            {
-                Condition = errorCondition,
-                Description = errorDescription
-            } : null
+            Error = errorCondition != null
+                        ? new AmqpError
+                        {
+                            Condition = errorCondition,
+                            Description = errorDescription
+                        }
+                        : null
         };
-
-        await _frameWriter.WriteFrameAsync(_session.LocalChannel, detach, cancellationToken)
-            .ConfigureAwait(false);
-
-        Log.LinkDetachSent(_logger, _session.Connection.ConnectionId, _session.LocalChannel, Name, LocalHandle);
+        await _frameWriter.WriteFrameAsync(Session.LocalChannel, detach, cancellationToken)
+                          .ConfigureAwait(false);
+        Log.LinkDetachSent(_logger, Session.Connection.ConnectionId, Session.LocalChannel, Name, LocalHandle);
     }
 
     /// <summary>
@@ -368,7 +334,7 @@ public sealed class AmqpLink
     /// </summary>
     internal void OnSessionEnded()
     {
-        _state = LinkState.Detached;
+        State = LinkState.Detached;
         _unsettledDeliveries.Clear();
     }
 }

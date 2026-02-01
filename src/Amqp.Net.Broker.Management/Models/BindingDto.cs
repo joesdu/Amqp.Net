@@ -31,7 +31,6 @@ public sealed record BindingDto
     public static BindingDto FromBinding(Binding binding)
     {
         ArgumentNullException.ThrowIfNull(binding);
-
         return new()
         {
             Source = binding.ExchangeName,

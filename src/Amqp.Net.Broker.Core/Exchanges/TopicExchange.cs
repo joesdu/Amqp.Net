@@ -54,7 +54,6 @@ public sealed class TopicExchange : IExchange
     public void AddBinding(Binding binding)
     {
         ArgumentNullException.ThrowIfNull(binding);
-
         lock (_lock)
         {
             // Check for duplicate
@@ -62,7 +61,6 @@ public sealed class TopicExchange : IExchange
             {
                 return;
             }
-
             var pattern = ConvertToRegex(binding.RoutingKey);
             _bindings.Add((binding, pattern));
         }
@@ -73,10 +71,9 @@ public sealed class TopicExchange : IExchange
     {
         lock (_lock)
         {
-            int removed = routingKey == null
-                ? _bindings.RemoveAll(b => b.Binding.QueueName == queueName)
-                : _bindings.RemoveAll(b => b.Binding.QueueName == queueName && b.Binding.RoutingKey == routingKey);
-
+            var removed = routingKey == null
+                              ? _bindings.RemoveAll(b => b.Binding.QueueName == queueName)
+                              : _bindings.RemoveAll(b => b.Binding.QueueName == queueName && b.Binding.RoutingKey == routingKey);
             return removed > 0;
         }
     }
@@ -87,10 +84,10 @@ public sealed class TopicExchange : IExchange
         lock (_lock)
         {
             return _bindings
-                .Where(b => b.Pattern.IsMatch(routingKey))
-                .Select(b => b.Binding.QueueName)
-                .Distinct()
-                .ToList();
+                   .Where(b => b.Pattern.IsMatch(routingKey))
+                   .Select(b => b.Binding.QueueName)
+                   .Distinct()
+                   .ToList();
         }
     }
 
@@ -103,9 +100,8 @@ public sealed class TopicExchange : IExchange
     {
         // Escape regex special characters except * and #
         var escaped = Regex.Escape(pattern)
-            .Replace(@"\*", @"[^.]+", StringComparison.Ordinal)  // * = one word (no dots)
-            .Replace(@"\#", @".*", StringComparison.Ordinal);     // # = zero or more words
-
-        return new Regex($"^{escaped}$", RegexOptions.Compiled);
+                           .Replace(@"\*", @"[^.]+", StringComparison.Ordinal) // * = one word (no dots)
+                           .Replace(@"\#", @".*", StringComparison.Ordinal);   // # = zero or more words
+        return new($"^{escaped}$", RegexOptions.Compiled);
     }
 }

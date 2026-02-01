@@ -46,40 +46,51 @@ public abstract record PerformativeBase : IPerformative
     /// <summary>
     /// Encodes the descriptor and list header for a performative.
     /// </summary>
-    protected static int EncodeListHeader(Span<byte> buffer, ulong descriptor, int bodySize, int fieldCount)
+    static protected int EncodeListHeader(Span<byte> buffer, ulong descriptor, int bodySize, int fieldCount)
     {
-        int offset = 0;
-        
+        var offset = 0;
+
         // Described type constructor (0x00)
         buffer[offset++] = FormatCode.Described;
-        
+
         // Descriptor (ulong)
         offset += AmqpEncoder.EncodeULong(buffer[offset..], descriptor);
-        
+
         // List header
         offset += AmqpEncoder.EncodeListHeader(buffer[offset..], bodySize, fieldCount);
-        
         return offset;
     }
 
     /// <summary>
     /// Calculates the size of the descriptor encoding.
     /// </summary>
-    protected static int GetDescriptorSize(ulong descriptor)
+    static protected int GetDescriptorSize(ulong descriptor)
     {
         // 0x00 (described) + ulong encoding
-        if (descriptor == 0) return 2; // 0x00 + 0x44 (ulong0)
-        if (descriptor <= 255) return 3; // 0x00 + 0x53 + byte
+        if (descriptor == 0)
+        {
+            return 2; // 0x00 + 0x44 (ulong0)
+        }
+        if (descriptor <= 255)
+        {
+            return 3; // 0x00 + 0x53 + byte
+        }
         return 10; // 0x00 + 0x80 + 8 bytes
     }
 
     /// <summary>
     /// Calculates the size of the list header encoding.
     /// </summary>
-    protected static int GetListHeaderSize(int bodySize, int fieldCount)
+    static protected int GetListHeaderSize(int bodySize, int fieldCount)
     {
-        if (fieldCount == 0) return 1; // list0
-        if (bodySize <= 255 && fieldCount <= 255) return 3; // list8
+        if (fieldCount == 0)
+        {
+            return 1; // list0
+        }
+        if (bodySize <= 255 && fieldCount <= 255)
+        {
+            return 3; // list8
+        }
         return 9; // list32
     }
 }
@@ -101,24 +112,23 @@ public static class PerformativeDecoder
         }
 
         // Decode descriptor
-        ulong descriptor = AmqpDecoder.DecodeULong(buffer[1..], out int descriptorSize);
-        int offset = 1 + descriptorSize;
+        var descriptor = AmqpDecoder.DecodeULong(buffer[1..], out var descriptorSize);
+        var offset = 1 + descriptorSize;
 
         // Decode based on descriptor
         IPerformative performative = descriptor switch
         {
-            Descriptor.Open => Open.Decode(buffer[offset..], out int openSize, out bytesConsumed),
-            Descriptor.Begin => Begin.Decode(buffer[offset..], out int beginSize, out bytesConsumed),
-            Descriptor.Attach => Attach.Decode(buffer[offset..], out int attachSize, out bytesConsumed),
-            Descriptor.Flow => Flow.Decode(buffer[offset..], out int flowSize, out bytesConsumed),
-            Descriptor.Transfer => Transfer.Decode(buffer[offset..], out int transferSize, out bytesConsumed),
-            Descriptor.Disposition => Disposition.Decode(buffer[offset..], out int dispSize, out bytesConsumed),
-            Descriptor.Detach => Detach.Decode(buffer[offset..], out int detachSize, out bytesConsumed),
-            Descriptor.End => End.Decode(buffer[offset..], out int endSize, out bytesConsumed),
-            Descriptor.Close => Close.Decode(buffer[offset..], out int closeSize, out bytesConsumed),
-            _ => throw new AmqpDecodeException($"Unknown performative descriptor: 0x{descriptor:X16}")
+            Descriptor.Open        => Open.Decode(buffer[offset..], out var openSize, out bytesConsumed),
+            Descriptor.Begin       => Begin.Decode(buffer[offset..], out var beginSize, out bytesConsumed),
+            Descriptor.Attach      => Attach.Decode(buffer[offset..], out var attachSize, out bytesConsumed),
+            Descriptor.Flow        => Flow.Decode(buffer[offset..], out var flowSize, out bytesConsumed),
+            Descriptor.Transfer    => Transfer.Decode(buffer[offset..], out var transferSize, out bytesConsumed),
+            Descriptor.Disposition => Disposition.Decode(buffer[offset..], out var dispSize, out bytesConsumed),
+            Descriptor.Detach      => Detach.Decode(buffer[offset..], out var detachSize, out bytesConsumed),
+            Descriptor.End         => End.Decode(buffer[offset..], out var endSize, out bytesConsumed),
+            Descriptor.Close       => Close.Decode(buffer[offset..], out var closeSize, out bytesConsumed),
+            _                      => throw new AmqpDecodeException($"Unknown performative descriptor: 0x{descriptor:X16}")
         };
-
         bytesConsumed += offset;
         return performative;
     }
@@ -132,7 +142,6 @@ public static class PerformativeDecoder
         {
             throw new AmqpDecodeException($"Expected described type (0x00), got 0x{buffer[0]:X2}");
         }
-
         return AmqpDecoder.DecodeULong(buffer[1..], out _);
     }
 }

@@ -3,7 +3,6 @@
 
 using System.Collections.Concurrent;
 using System.IO.Pipelines;
-using System.Net;
 using System.Net.Sockets;
 using Amqp.Net.Broker.Server.Configuration;
 using Amqp.Net.Broker.Server.Connections;
@@ -18,18 +17,18 @@ namespace Amqp.Net.Broker.Server.Transport;
 /// </summary>
 public sealed class AmqpListener : IAsyncDisposable
 {
-    private readonly AmqpServerOptions _options;
     private readonly IAmqpConnectionHandler _connectionHandler;
-    private readonly ILogger<AmqpListener> _logger;
-    private readonly List<Socket> _listenSockets = [];
     private readonly ConcurrentDictionary<string, AmqpConnectionContext> _connections = new();
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly PipeOptions _inputPipeOptions;
+    private readonly List<Socket> _listenSockets = [];
+    private readonly ILogger<AmqpListener> _logger;
+    private readonly AmqpServerOptions _options;
     private readonly PipeOptions _outputPipeOptions;
-    
-    private CancellationTokenSource? _cts;
     private Task? _acceptLoopTask;
     private long _connectionIdCounter;
+
+    private CancellationTokenSource? _cts;
     private bool _disposed;
 
     /// <summary>
@@ -43,20 +42,16 @@ public sealed class AmqpListener : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(connectionHandler);
         ArgumentNullException.ThrowIfNull(logger);
-
         _options = options.Value;
         _connectionHandler = connectionHandler;
         _logger = logger;
-        _connectionSemaphore = new SemaphoreSlim(_options.MaxConnections, _options.MaxConnections);
+        _connectionSemaphore = new(_options.MaxConnections, _options.MaxConnections);
 
         // Configure pipe options with memory limits for backpressure
-        _inputPipeOptions = new PipeOptions(
-            pauseWriterThreshold: _options.InputBufferSize * 2,
+        _inputPipeOptions = new(pauseWriterThreshold: _options.InputBufferSize * 2,
             resumeWriterThreshold: _options.InputBufferSize,
             useSynchronizationContext: false);
-
-        _outputPipeOptions = new PipeOptions(
-            pauseWriterThreshold: _options.OutputBufferSize * 2,
+        _outputPipeOptions = new(pauseWriterThreshold: _options.OutputBufferSize * 2,
             resumeWriterThreshold: _options.OutputBufferSize,
             useSynchronizationContext: false);
     }
@@ -72,6 +67,24 @@ public sealed class AmqpListener : IAsyncDisposable
     public IEnumerable<string> ConnectionIds => _connections.Keys;
 
     /// <summary>
+    /// Disposes the listener and all resources.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+        _disposed = true;
+        await StopAsync().ConfigureAwait(false);
+        _connectionSemaphore.Dispose();
+        foreach (var socket in _listenSockets)
+        {
+            socket.Dispose();
+        }
+    }
+
+    /// <summary>
     /// Starts listening for connections.
     /// </summary>
     public Task StartAsync(CancellationToken cancellationToken = default)
@@ -80,23 +93,19 @@ public sealed class AmqpListener : IAsyncDisposable
         {
             throw new InvalidOperationException("Listener is already started.");
         }
-
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
         foreach (var endpoint in _options.ListenEndpoints)
         {
             var socket = new Socket(endpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-            
+
             // Socket options for performance
             socket.NoDelay = true;
             socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-            
             try
             {
                 socket.Bind(endpoint);
                 socket.Listen(_options.Backlog);
                 _listenSockets.Add(socket);
-                
                 Log.ListenerStarted(_logger, endpoint);
             }
             catch (SocketException ex)
@@ -109,7 +118,6 @@ public sealed class AmqpListener : IAsyncDisposable
 
         // Start accept loop for each socket
         _acceptLoopTask = Task.WhenAll(_listenSockets.Select(s => AcceptLoopAsync(s, _cts.Token)));
-
         return Task.CompletedTask;
     }
 
@@ -122,7 +130,6 @@ public sealed class AmqpListener : IAsyncDisposable
         {
             return;
         }
-
         Log.ListenerStopping(_logger);
 
         // Signal cancellation
@@ -165,27 +172,22 @@ public sealed class AmqpListener : IAsyncDisposable
         // Close all active connections
         var closeTasks = _connections.Values.Select(CloseConnectionInternalAsync);
         await Task.WhenAll(closeTasks).ConfigureAwait(false);
-
         _connections.Clear();
         _listenSockets.Clear();
-        
         _cts.Dispose();
         _cts = null;
-
         Log.ListenerStopped(_logger);
     }
 
     private async Task AcceptLoopAsync(Socket listenSocket, CancellationToken cancellationToken)
     {
         var endpoint = listenSocket.LocalEndPoint;
-        
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
                 // Wait for connection slot
                 await _connectionSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
                 Socket clientSocket;
                 try
                 {
@@ -222,7 +224,7 @@ public sealed class AmqpListener : IAsyncDisposable
             catch (SocketException ex)
             {
                 Log.AcceptError(_logger, ex, endpoint);
-                
+
                 // Brief delay before retrying to avoid tight loop on persistent errors
                 await Task.Delay(100, cancellationToken).ConfigureAwait(false);
             }
@@ -233,11 +235,8 @@ public sealed class AmqpListener : IAsyncDisposable
     {
         var connectionId = GenerateConnectionId();
         var remoteEndpoint = socket.RemoteEndPoint;
-        
         Log.ConnectionAccepted(_logger, connectionId, remoteEndpoint);
-
         AmqpConnectionContext? context = null;
-        
         try
         {
             // Configure socket
@@ -245,14 +244,12 @@ public sealed class AmqpListener : IAsyncDisposable
 
             // Read and validate protocol header
             var headerResult = await ReadProtocolHeaderAsync(socket, cancellationToken).ConfigureAwait(false);
-            
             if (headerResult == null)
             {
                 Log.InvalidProtocolHeader(_logger, connectionId, remoteEndpoint);
                 socket.Close();
                 return;
             }
-
             var (protocolId, shouldRespond) = headerResult.Value;
 
             // Send protocol header response if needed
@@ -262,15 +259,12 @@ public sealed class AmqpListener : IAsyncDisposable
             }
 
             // Create connection context
-            context = AmqpConnectionContext.Create(
-                socket,
+            context = AmqpConnectionContext.Create(socket,
                 connectionId,
                 protocolId,
                 _inputPipeOptions,
                 _outputPipeOptions);
-
             _connections.TryAdd(connectionId, context);
-
             var protocol = protocolId == ProtocolHeader.ProtocolIdSasl ? "SASL" : "AMQP";
             Log.ConnectionEstablished(_logger, connectionId, remoteEndpoint, protocol);
 
@@ -292,7 +286,6 @@ public sealed class AmqpListener : IAsyncDisposable
         finally
         {
             _connections.TryRemove(connectionId, out _);
-            
             if (context != null)
             {
                 await context.DisposeAsync().ConfigureAwait(false);
@@ -301,15 +294,13 @@ public sealed class AmqpListener : IAsyncDisposable
             {
                 socket.Dispose();
             }
-
             _connectionSemaphore.Release();
-            
             Log.ConnectionClosed(_logger, connectionId);
         }
     }
 
     private async Task<(byte ProtocolId, bool ShouldRespond)?> ReadProtocolHeaderAsync(
-        Socket socket, 
+        Socket socket,
         CancellationToken cancellationToken)
     {
         var buffer = new byte[ProtocolHeader.Size];
@@ -318,42 +309,33 @@ public sealed class AmqpListener : IAsyncDisposable
         // Read exactly 8 bytes for protocol header
         while (received < ProtocolHeader.Size)
         {
-            var bytesRead = await socket.ReceiveAsync(
-                buffer.AsMemory(received, ProtocolHeader.Size - received),
-                SocketFlags.None,
-                cancellationToken).ConfigureAwait(false);
-
+            var bytesRead = await socket.ReceiveAsync(buffer.AsMemory(received, ProtocolHeader.Size - received),
+                                SocketFlags.None,
+                                cancellationToken).ConfigureAwait(false);
             if (bytesRead == 0)
             {
                 // Connection closed
                 return null;
             }
-
             received += bytesRead;
         }
-
         var result = ProtocolHeader.Validate(buffer);
-
         switch (result)
         {
             case ProtocolHeaderResult.Amqp:
                 return (ProtocolHeader.ProtocolIdAmqp, true);
-            
             case ProtocolHeaderResult.Sasl:
                 return (ProtocolHeader.ProtocolIdSasl, true);
-            
             case ProtocolHeaderResult.Tls:
                 Log.TlsNotSupported(_logger);
                 // Send back AMQP header to indicate we don't support TLS
                 await socket.SendAsync(ProtocolHeader.Amqp100.ToArray(), SocketFlags.None, cancellationToken).ConfigureAwait(false);
                 return null;
-            
             case ProtocolHeaderResult.UnsupportedVersion:
                 Log.UnsupportedVersion(_logger);
                 // Send back our supported version
                 await socket.SendAsync(ProtocolHeader.Amqp100.ToArray(), SocketFlags.None, cancellationToken).ConfigureAwait(false);
                 return null;
-            
             default:
                 Log.InvalidHeader(_logger, BitConverter.ToString(buffer));
                 return null;
@@ -411,28 +393,6 @@ public sealed class AmqpListener : IAsyncDisposable
         await using (context.ConfigureAwait(false))
         {
             // Context will be disposed when exiting this block
-        }
-    }
-
-    /// <summary>
-    /// Disposes the listener and all resources.
-    /// </summary>
-    public async ValueTask DisposeAsync()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _disposed = true;
-
-        await StopAsync().ConfigureAwait(false);
-        
-        _connectionSemaphore.Dispose();
-
-        foreach (var socket in _listenSockets)
-        {
-            socket.Dispose();
         }
     }
 }

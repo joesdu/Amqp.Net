@@ -41,7 +41,6 @@ public sealed record ExchangeDto
     public static ExchangeDto FromExchange(IExchange exchange)
     {
         ArgumentNullException.ThrowIfNull(exchange);
-
         return new()
         {
             Name = exchange.Name,

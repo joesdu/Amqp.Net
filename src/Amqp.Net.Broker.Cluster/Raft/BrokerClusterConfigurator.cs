@@ -26,7 +26,6 @@ public sealed class BrokerClusterConfigurator : IClusterMemberLifetime
     public void OnStart(IRaftCluster cluster, IDictionary<string, string> metadata)
     {
         ArgumentNullException.ThrowIfNull(cluster);
-
         cluster.LeaderChanged += OnLeaderChanged;
         _logger.LogInformation("Cluster node started");
     }
@@ -35,7 +34,6 @@ public sealed class BrokerClusterConfigurator : IClusterMemberLifetime
     public void OnStop(IRaftCluster cluster)
     {
         ArgumentNullException.ThrowIfNull(cluster);
-
         cluster.LeaderChanged -= OnLeaderChanged;
         _logger.LogInformation("Cluster node stopped");
     }

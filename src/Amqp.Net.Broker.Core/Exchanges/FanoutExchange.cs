@@ -52,7 +52,6 @@ public sealed class FanoutExchange : IExchange
     public void AddBinding(Binding binding)
     {
         ArgumentNullException.ThrowIfNull(binding);
-
         lock (_lock)
         {
             // Check for duplicate (only queue name matters for fanout)
@@ -69,7 +68,7 @@ public sealed class FanoutExchange : IExchange
         lock (_lock)
         {
             // For fanout, routing key is ignored
-            int removed = _bindings.RemoveAll(b => b.QueueName == queueName);
+            var removed = _bindings.RemoveAll(b => b.QueueName == queueName);
             return removed > 0;
         }
     }
@@ -81,9 +80,9 @@ public sealed class FanoutExchange : IExchange
         lock (_lock)
         {
             return _bindings
-                .Select(b => b.QueueName)
-                .Distinct()
-                .ToList();
+                   .Select(b => b.QueueName)
+                   .Distinct()
+                   .ToList();
         }
     }
 }

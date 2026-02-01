@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Amqp.Net.Broker.Core.Exchanges;
 using Amqp.Net.Broker.Core.Queues;
 
@@ -76,16 +77,15 @@ public abstract record ClusterCommand
     {
         var type = (CommandType)data[0];
         var json = data[1..];
-
         return type switch
         {
             CommandType.DeclareExchange => JsonSerializer.Deserialize(json, ClusterCommandSerializerContext.Default.DeclareExchangeCommand)!,
-            CommandType.DeleteExchange => JsonSerializer.Deserialize(json, ClusterCommandSerializerContext.Default.DeleteExchangeCommand)!,
-            CommandType.DeclareQueue => JsonSerializer.Deserialize(json, ClusterCommandSerializerContext.Default.DeclareQueueCommand)!,
-            CommandType.DeleteQueue => JsonSerializer.Deserialize(json, ClusterCommandSerializerContext.Default.DeleteQueueCommand)!,
-            CommandType.Bind => JsonSerializer.Deserialize(json, ClusterCommandSerializerContext.Default.BindCommand)!,
-            CommandType.Unbind => JsonSerializer.Deserialize(json, ClusterCommandSerializerContext.Default.UnbindCommand)!,
-            _ => throw new InvalidOperationException($"Unknown command type: {type}")
+            CommandType.DeleteExchange  => JsonSerializer.Deserialize(json, ClusterCommandSerializerContext.Default.DeleteExchangeCommand)!,
+            CommandType.DeclareQueue    => JsonSerializer.Deserialize(json, ClusterCommandSerializerContext.Default.DeclareQueueCommand)!,
+            CommandType.DeleteQueue     => JsonSerializer.Deserialize(json, ClusterCommandSerializerContext.Default.DeleteQueueCommand)!,
+            CommandType.Bind            => JsonSerializer.Deserialize(json, ClusterCommandSerializerContext.Default.BindCommand)!,
+            CommandType.Unbind          => JsonSerializer.Deserialize(json, ClusterCommandSerializerContext.Default.UnbindCommand)!,
+            _                           => throw new InvalidOperationException($"Unknown command type: {type}")
         };
     }
 }
@@ -208,7 +208,6 @@ public sealed record QueueOptionsDto
     public static QueueOptionsDto FromQueueOptions(QueueOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-
         return new()
         {
             Durable = options.Durable,
@@ -226,18 +225,19 @@ public sealed record QueueOptionsDto
     /// <summary>
     /// Converts to QueueOptions.
     /// </summary>
-    public QueueOptions ToQueueOptions() => new()
-    {
-        Durable = Durable,
-        Exclusive = Exclusive,
-        AutoDelete = AutoDelete,
-        MaxLength = MaxLength,
-        MaxLengthBytes = MaxLengthBytes,
-        MessageTtl = MessageTtlMs.HasValue ? TimeSpan.FromMilliseconds(MessageTtlMs.Value) : null,
-        DeadLetterExchange = DeadLetterExchange,
-        DeadLetterRoutingKey = DeadLetterRoutingKey,
-        MaxPriority = MaxPriority
-    };
+    public QueueOptions ToQueueOptions() =>
+        new()
+        {
+            Durable = Durable,
+            Exclusive = Exclusive,
+            AutoDelete = AutoDelete,
+            MaxLength = MaxLength,
+            MaxLengthBytes = MaxLengthBytes,
+            MessageTtl = MessageTtlMs.HasValue ? TimeSpan.FromMilliseconds(MessageTtlMs.Value) : null,
+            DeadLetterExchange = DeadLetterExchange,
+            DeadLetterRoutingKey = DeadLetterRoutingKey,
+            MaxPriority = MaxPriority
+        };
 }
 
 /// <summary>
@@ -305,13 +305,11 @@ public sealed record UnbindCommand : ClusterCommand
 /// <summary>
 /// JSON serialization context for cluster commands.
 /// </summary>
-[System.Text.Json.Serialization.JsonSerializable(typeof(DeclareExchangeCommand))]
-[System.Text.Json.Serialization.JsonSerializable(typeof(DeleteExchangeCommand))]
-[System.Text.Json.Serialization.JsonSerializable(typeof(DeclareQueueCommand))]
-[System.Text.Json.Serialization.JsonSerializable(typeof(DeleteQueueCommand))]
-[System.Text.Json.Serialization.JsonSerializable(typeof(BindCommand))]
-[System.Text.Json.Serialization.JsonSerializable(typeof(UnbindCommand))]
-[System.Text.Json.Serialization.JsonSerializable(typeof(QueueOptionsDto))]
-internal sealed partial class ClusterCommandSerializerContext : System.Text.Json.Serialization.JsonSerializerContext
-{
-}
+[JsonSerializable(typeof(DeclareExchangeCommand))]
+[JsonSerializable(typeof(DeleteExchangeCommand))]
+[JsonSerializable(typeof(DeclareQueueCommand))]
+[JsonSerializable(typeof(DeleteQueueCommand))]
+[JsonSerializable(typeof(BindCommand))]
+[JsonSerializable(typeof(UnbindCommand))]
+[JsonSerializable(typeof(QueueOptionsDto))]
+internal sealed partial class ClusterCommandSerializerContext : JsonSerializerContext { }
