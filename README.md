@@ -61,6 +61,7 @@ dotnet run
 ```
 
 The broker will start listening on:
+
 - **AMQP**: `amqp://localhost:5672`
 - **Management API**: `http://localhost:15672`
 
@@ -101,27 +102,28 @@ Amqp.Net supports distributed clustering using the Raft consensus algorithm (via
 
 ```json
 {
-  "BrokerCluster": {
-    "NodeId": "node1",
-    "ListenAddress": "https://localhost:5001",
-    "PublicAddress": "https://node1.example.com:5001",
-    "SeedNodes": [
-      "https://localhost:5001",
-      "https://localhost:5002",
-      "https://localhost:5003"
-    ],
-    "DataPath": "./data/raft",
-    "ElectionTimeoutLowerMs": 150,
-    "ElectionTimeoutUpperMs": 300,
-    "HeartbeatIntervalMs": 50,
-    "ColdStart": false
-  }
+    "BrokerCluster": {
+        "NodeId": "node1",
+        "ListenAddress": "https://localhost:5001",
+        "PublicAddress": "https://node1.example.com:5001",
+        "SeedNodes": [
+            "https://localhost:5001",
+            "https://localhost:5002",
+            "https://localhost:5003"
+        ],
+        "DataPath": "./data/raft",
+        "ElectionTimeoutLowerMs": 150,
+        "ElectionTimeoutUpperMs": 300,
+        "HeartbeatIntervalMs": 50,
+        "ColdStart": false
+    }
 }
 ```
 
 ### What Gets Replicated
 
 The following broker topology is replicated across all cluster nodes:
+
 - **Exchanges** - Name, type, durability settings
 - **Queues** - Name, options (TTL, max length, dead letter settings)
 - **Bindings** - Exchange-to-queue bindings with routing keys
@@ -143,47 +145,47 @@ dotnet run -- --urls=https://localhost:5003
 
 ## Management API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/overview` | Broker statistics and health |
-| GET | `/api/overview/health` | Health check endpoint |
-| GET | `/api/exchanges` | List all exchanges |
-| GET | `/api/exchanges/{name}` | Get exchange details |
-| POST | `/api/exchanges` | Declare an exchange |
-| DELETE | `/api/exchanges/{name}` | Delete an exchange |
-| GET | `/api/queues` | List all queues |
-| GET | `/api/queues/{name}` | Get queue details |
-| POST | `/api/queues` | Declare a queue |
-| DELETE | `/api/queues/{name}` | Delete a queue |
-| DELETE | `/api/queues/{name}/contents` | Purge queue messages |
-| GET | `/api/bindings` | List all bindings |
-| POST | `/api/bindings` | Create a binding |
-| DELETE | `/api/bindings` | Delete a binding |
+| Method | Endpoint                      | Description                  |
+| ------ | ----------------------------- | ---------------------------- |
+| GET    | `/api/overview`               | Broker statistics and health |
+| GET    | `/api/overview/health`        | Health check endpoint        |
+| GET    | `/api/exchanges`              | List all exchanges           |
+| GET    | `/api/exchanges/{name}`       | Get exchange details         |
+| POST   | `/api/exchanges`              | Declare an exchange          |
+| DELETE | `/api/exchanges/{name}`       | Delete an exchange           |
+| GET    | `/api/queues`                 | List all queues              |
+| GET    | `/api/queues/{name}`          | Get queue details            |
+| POST   | `/api/queues`                 | Declare a queue              |
+| DELETE | `/api/queues/{name}`          | Delete a queue               |
+| DELETE | `/api/queues/{name}/contents` | Purge queue messages         |
+| GET    | `/api/bindings`               | List all bindings            |
+| POST   | `/api/bindings`               | Create a binding             |
+| DELETE | `/api/bindings`               | Delete a binding             |
 
 ## Configuration
 
 ### Queue Options
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `Durable` | bool | Survives broker restart |
-| `Exclusive` | bool | Exclusive to declaring connection |
-| `AutoDelete` | bool | Deleted when last consumer disconnects |
-| `MaxLength` | int? | Maximum number of messages |
-| `MaxLengthBytes` | long? | Maximum total size in bytes |
-| `MessageTtl` | TimeSpan? | Default message TTL |
-| `DeadLetterExchange` | string? | DLX for rejected messages |
-| `DeadLetterRoutingKey` | string? | Routing key for DLX |
-| `MaxPriority` | byte | Maximum priority level (0-255) |
+| Option                 | Type      | Description                            |
+| ---------------------- | --------- | -------------------------------------- |
+| `Durable`              | bool      | Survives broker restart                |
+| `Exclusive`            | bool      | Exclusive to declaring connection      |
+| `AutoDelete`           | bool      | Deleted when last consumer disconnects |
+| `MaxLength`            | int?      | Maximum number of messages             |
+| `MaxLengthBytes`       | long?     | Maximum total size in bytes            |
+| `MessageTtl`           | TimeSpan? | Default message TTL                    |
+| `DeadLetterExchange`   | string?   | DLX for rejected messages              |
+| `DeadLetterRoutingKey` | string?   | Routing key for DLX                    |
+| `MaxPriority`          | byte      | Maximum priority level (0-255)         |
 
 ### Exchange Types
 
-| Type | Routing Behavior |
-|------|------------------|
-| `Direct` | Exact routing key match |
-| `Topic` | Pattern matching with `*` and `#` wildcards |
-| `Fanout` | Broadcast to all bound queues |
-| `Headers` | Match on message headers |
+| Type      | Routing Behavior                            |
+| --------- | ------------------------------------------- |
+| `Direct`  | Exact routing key match                     |
+| `Topic`   | Pattern matching with `*` and `#` wildcards |
+| `Fanout`  | Broadcast to all bound queues               |
+| `Headers` | Match on message headers                    |
 
 ## Building
 
@@ -200,7 +202,7 @@ dotnet build -c Release
 
 ## Dependencies
 
-- **.NET 9.0** - Runtime and SDK
+- **.NET 10.0** - Runtime and SDK
 - **DotNext.Net.Cluster** - Raft consensus implementation
 - **DotNext.AspNetCore.Cluster** - ASP.NET Core integration for Raft
 - **Swashbuckle.AspNetCore** - Swagger/OpenAPI support
@@ -216,4 +218,5 @@ This project was entirely created by **Claude Opus 4.5** (Anthropic's AI assista
 
 ---
 
-*Built with AI, for the future of messaging.*
+_Built with AI, for the future of messaging._
+

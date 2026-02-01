@@ -1,29 +1,29 @@
 <Project>
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <LangVersion>preview</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest-all</AnalysisLevel>
-    
+
     <!-- Performance optimizations -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <OptimizationPreference>Speed</OptimizationPreference>
-    
+
     <!-- Assembly info -->
     <Company>Amqp.Net</Company>
     <Product>Amqp.Net Message Broker</Product>
     <Copyright>Copyright (c) 2024-2026 Amqp.Net Contributors</Copyright>
     <Authors>Amqp.Net Contributors</Authors>
-    
+
     <!-- Package info -->
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/amqp-net/amqp-net</PackageProjectUrl>
     <RepositoryUrl>https://github.com/amqp-net/amqp-net</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    
+
     <!-- Versioning -->
     <VersionPrefix>0.1.0</VersionPrefix>
     <VersionSuffix>alpha</VersionSuffix>
