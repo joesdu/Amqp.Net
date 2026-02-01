@@ -2,7 +2,9 @@
 
   <PropertyGroup>
     <Description>Clustering, Raft consensus, and distributed coordination for Amqp.Net broker</Description>
-    <PackageTags>amqp;cluster;raft;distributed;sharding</PackageTags>
+    <PackageTags>amqp;cluster;raft;distributed;consensus</PackageTags>
+    <!-- Suppress experimental API warnings for DotNext Raft and some code analysis rules for initial implementation -->
+    <NoWarn>$(NoWarn);DOTNEXT001;CA1848;CA1031;CA2007;CA2012;CA1008;CA1028</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -10,13 +12,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Akka" />
-    <PackageReference Include="Akka.Cluster" />
-    <PackageReference Include="Akka.Cluster.Sharding" />
-    <PackageReference Include="Akka.Cluster.Tools" />
-    <PackageReference Include="Akka.Persistence" />
-    <PackageReference Include="Akka.Streams" />
-    <PackageReference Include="Akka.DependencyInjection" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="DotNext.Net.Cluster" />
+    <PackageReference Include="DotNext.AspNetCore.Cluster" />
   </ItemGroup>
 
 </Project>
