@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>AMQP 1.0 wire protocol implementation with high-performance encoding/decoding</Description>
+    <PackageTags>amqp;protocol;messaging;encoding</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IO.Pipelines" />
+  </ItemGroup>
+
+</Project>

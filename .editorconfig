@@ -1,0 +1,38 @@
+# EditorConfig for Amqp.Net
+root = true
+
+[*]
+indent_style = space
+indent_size = 4
+end_of_line = crlf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.cs]
+# AMQP protocol types must match spec naming - suppress type name warnings
+dotnet_diagnostic.CA1720.severity = none
+
+# Arrays are acceptable for protocol types (capabilities, locales, etc.)
+dotnet_diagnostic.CA1819.severity = none
+
+# End is a valid AMQP performative name per spec
+dotnet_diagnostic.CA1716.severity = none
+
+# Struct equality - not needed for internal buffer types
+dotnet_diagnostic.CA1815.severity = none
+
+# Exception constructors - simplified for internal use
+dotnet_diagnostic.CA1032.severity = none
+
+# List return type is acceptable for decoded values
+dotnet_diagnostic.CA1002.severity = none
+
+# Boxing is intentional for generic value decoding
+dotnet_diagnostic.CA1859.severity = none
+
+# ArgumentOutOfRangeException.ThrowIfNegative - keep explicit for clarity
+dotnet_diagnostic.CA1512.severity = suggestion
+
+[*.{json,xml,csproj,props}]
+indent_size = 2

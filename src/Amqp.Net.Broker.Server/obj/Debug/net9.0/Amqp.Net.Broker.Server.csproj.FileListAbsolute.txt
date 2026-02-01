@@ -1,0 +1,17 @@
+G:\Amqp.Net\src\Amqp.Net.Broker.Server\obj\Debug\net9.0\Amqp.Net.Broker.Server.csproj.AssemblyReference.cache
+G:\Amqp.Net\src\Amqp.Net.Broker.Server\obj\Debug\net9.0\Amqp.Net.Broker.Server.GeneratedMSBuildEditorConfig.editorconfig
+G:\Amqp.Net\src\Amqp.Net.Broker.Server\obj\Debug\net9.0\Amqp.Net.Broker.Server.AssemblyInfoInputs.cache
+G:\Amqp.Net\src\Amqp.Net.Broker.Server\obj\Debug\net9.0\Amqp.Net.Broker.Server.AssemblyInfo.cs
+G:\Amqp.Net\src\Amqp.Net.Broker.Server\obj\Debug\net9.0\Amqp.Net.Broker.Server.csproj.CoreCompileInputs.cache
+G:\Amqp.Net\src\Amqp.Net.Broker.Server\bin\Debug\net9.0\Amqp.Net.Broker.Server.deps.json
+G:\Amqp.Net\src\Amqp.Net.Broker.Server\bin\Debug\net9.0\Amqp.Net.Broker.Server.dll
+G:\Amqp.Net\src\Amqp.Net.Broker.Server\bin\Debug\net9.0\Amqp.Net.Broker.Server.pdb
+G:\Amqp.Net\src\Amqp.Net.Broker.Server\bin\Debug\net9.0\Amqp.Net.Broker.Core.dll
+G:\Amqp.Net\src\Amqp.Net.Broker.Server\bin\Debug\net9.0\Amqp.Net.Protocol.dll
+G:\Amqp.Net\src\Amqp.Net.Broker.Server\bin\Debug\net9.0\Amqp.Net.Broker.Core.pdb
+G:\Amqp.Net\src\Amqp.Net.Broker.Server\bin\Debug\net9.0\Amqp.Net.Protocol.pdb
+G:\Amqp.Net\src\Amqp.Net.Broker.Server\obj\Debug\net9.0\Amqp.Net.B06ECF4B.Up2Date
+G:\Amqp.Net\src\Amqp.Net.Broker.Server\obj\Debug\net9.0\Amqp.Net.Broker.Server.dll
+G:\Amqp.Net\src\Amqp.Net.Broker.Server\obj\Debug\net9.0\refint\Amqp.Net.Broker.Server.dll
+G:\Amqp.Net\src\Amqp.Net.Broker.Server\obj\Debug\net9.0\Amqp.Net.Broker.Server.pdb
+G:\Amqp.Net\src\Amqp.Net.Broker.Server\obj\Debug\net9.0\ref\Amqp.Net.Broker.Server.dll

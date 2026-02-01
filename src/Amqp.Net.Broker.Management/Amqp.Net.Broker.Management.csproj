@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>REST management API for Amqp.Net broker</Description>
+    <PackageTags>amqp;management;api;rest</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Amqp.Net.Broker.Core\Amqp.Net.Broker.Core.csproj" />
+    <ProjectReference Include="..\Amqp.Net.Broker.Cluster\Amqp.Net.Broker.Cluster.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
+  </ItemGroup>
+
+</Project>

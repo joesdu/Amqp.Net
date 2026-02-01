@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v9.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v9.0": {
+      "Amqp.Net.Protocol/0.1.0-alpha": {
+        "runtime": {
+          "Amqp.Net.Protocol.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Amqp.Net.Protocol/0.1.0-alpha": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

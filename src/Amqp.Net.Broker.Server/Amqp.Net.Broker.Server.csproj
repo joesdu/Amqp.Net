@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Network server, connection handling, and flow control for Amqp.Net broker</Description>
+    <PackageTags>amqp;server;networking;tcp</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Amqp.Net.Broker.Core\Amqp.Net.Broker.Core.csproj" />
+    <!-- Temporarily disabled due to Akka.Cluster vulnerability NU1904 -->
+    <!-- <ProjectReference Include="..\Amqp.Net.Broker.Cluster\Amqp.Net.Broker.Cluster.csproj" /> -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IO.Pipelines" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+</Project>

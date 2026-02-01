@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Clustering, Raft consensus, and distributed coordination for Amqp.Net broker</Description>
+    <PackageTags>amqp;cluster;raft;distributed;sharding</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Amqp.Net.Broker.Core\Amqp.Net.Broker.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Akka" />
+    <PackageReference Include="Akka.Cluster" />
+    <PackageReference Include="Akka.Cluster.Sharding" />
+    <PackageReference Include="Akka.Cluster.Tools" />
+    <PackageReference Include="Akka.Persistence" />
+    <PackageReference Include="Akka.Streams" />
+    <PackageReference Include="Akka.DependencyInjection" />
+  </ItemGroup>
+
+</Project>
