@@ -10,24 +10,17 @@ namespace Amqp.Net.Broker.Cluster.Raft;
 /// <summary>
 /// Configures the Raft cluster behavior.
 /// </summary>
-public sealed class BrokerClusterConfigurator : IClusterMemberLifetime
+/// <remarks>
+/// Creates a new cluster configurator.
+/// </remarks>
+public sealed class BrokerClusterConfigurator(ILogger<BrokerClusterConfigurator> logger) : IClusterMemberLifetime
 {
-    private readonly ILogger<BrokerClusterConfigurator> _logger;
-
-    /// <summary>
-    /// Creates a new cluster configurator.
-    /// </summary>
-    public BrokerClusterConfigurator(ILogger<BrokerClusterConfigurator> logger)
-    {
-        _logger = logger;
-    }
-
     /// <inheritdoc />
     public void OnStart(IRaftCluster cluster, IDictionary<string, string> metadata)
     {
         ArgumentNullException.ThrowIfNull(cluster);
         cluster.LeaderChanged += OnLeaderChanged;
-        _logger.LogInformation("Cluster node started");
+        logger.LogInformation("Cluster node started");
     }
 
     /// <inheritdoc />
@@ -35,18 +28,18 @@ public sealed class BrokerClusterConfigurator : IClusterMemberLifetime
     {
         ArgumentNullException.ThrowIfNull(cluster);
         cluster.LeaderChanged -= OnLeaderChanged;
-        _logger.LogInformation("Cluster node stopped");
+        logger.LogInformation("Cluster node stopped");
     }
 
     private void OnLeaderChanged(ICluster cluster, IClusterMember? leader)
     {
         if (leader is null)
         {
-            _logger.LogWarning("Cluster has no leader");
+            logger.LogWarning("Cluster has no leader");
         }
         else
         {
-            _logger.LogInformation("New cluster leader: {LeaderEndpoint}", leader.EndPoint);
+            logger.LogInformation("New cluster leader: {LeaderEndpoint}", leader.EndPoint);
         }
     }
 }

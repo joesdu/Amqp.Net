@@ -11,14 +11,18 @@ namespace Amqp.Net.Broker.Core.Exchanges;
 public sealed class DirectExchange : IExchange
 {
     private readonly List<Binding> _bindings = [];
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
 
     /// <summary>
     /// Creates a new direct exchange.
     /// </summary>
     public DirectExchange(string name, bool durable = false, bool autoDelete = false)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(name);
+        if (!string.IsNullOrEmpty(name) && string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("The value cannot be whitespace.", nameof(name));
+        }
         Name = name;
         Durable = durable;
         AutoDelete = autoDelete;
@@ -43,7 +47,7 @@ public sealed class DirectExchange : IExchange
         {
             lock (_lock)
             {
-                return _bindings.ToList();
+                return [.. _bindings];
             }
         }
     }
@@ -79,11 +83,13 @@ public sealed class DirectExchange : IExchange
     {
         lock (_lock)
         {
-            return _bindings
+            return
+            [
+                .. _bindings
                    .Where(b => b.RoutingKey == routingKey)
                    .Select(b => b.QueueName)
                    .Distinct()
-                   .ToList();
+            ];
         }
     }
 }

@@ -53,7 +53,7 @@ public sealed class BrokerStateMachine : ISupplier<BrokerState>, IAsyncDisposabl
     /// <summary>
     /// Creates a new broker state machine from configuration.
     /// </summary>
-    public BrokerStateMachine(IConfiguration config, ILogger<BrokerStateMachine>? logger = null)
+    public BrokerStateMachine(IConfiguration? config, ILogger<BrokerStateMachine>? logger = null)
         : this(config?[LogLocation] ?? "./data/raft", logger)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -355,9 +355,9 @@ public sealed class BrokerState
     {
         var snapshot = new BrokerStateSnapshot
         {
-            Exchanges = _exchanges.Values.ToList(),
-            Queues = _queues.Values.ToList(),
-            Bindings = _bindings.SelectMany(kvp => kvp.Value).ToList()
+            Exchanges = [.. _exchanges.Values],
+            Queues = [.. _queues.Values],
+            Bindings = [.. _bindings.SelectMany(kvp => kvp.Value)]
         };
         await JsonSerializer.SerializeAsync(stream, snapshot, BrokerStateSnapshotContext.Default.BrokerStateSnapshot, token).ConfigureAwait(false);
     }
